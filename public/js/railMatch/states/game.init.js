@@ -390,6 +390,6 @@ console.log(' test');
 				}
 
 				// wall.y += 4.8;
-				wall.y += 6.38;
+				wall.y += 4.8;
 			}
 		}

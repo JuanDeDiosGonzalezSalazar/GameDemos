@@ -14,7 +14,7 @@
 			padding: 0;
 		}
 	</style>
-	<script src="/public/js/pixi.js/dist/pixi.min.js"></script>
+	<script src="/public/js/pixi.min.js"></script>
 	<script src="/public/js/tink.js"></script>
 	<script src="/public/js/spriteUtilities.js"></script>
 	<script src="/public/js/bump.js"></script>
@@ -450,7 +450,7 @@
 						case "game over":
 							break;
 						case "restarting":
-							meteorSpeed = 2;
+							meteorSpeed = 1;
 							tint = {
 								r: 0,
 								g: 0,
@@ -582,7 +582,7 @@
 				/*==================================*/
 
 				var meteors = [];
-				var meteorSpeed = 2;
+				var meteorSpeed = 1;
 				var meteorSpawnInterval = 13;
 
 				function createMeteor() {
