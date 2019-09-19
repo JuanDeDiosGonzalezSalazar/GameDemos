@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<script src="/public/js/pixi.js/dist/pixi.min.js"></script>
+	<script src="/public/js/tink.js"></script>
+</head>
+
+<body>
+	<script type="text/javascript">
+		/*==================================*/
+		/*									*/
+		/* REANAME PIXI						*/
+		/*									*/
+		/*==================================*/
+		var Sprite = PIXI.Sprite;
+		var Graphics = PIXI.Graphics;
+		var Container = PIXI.Container;
+		var Text = PIXI.Text;
+		var ParticleContainer = PIXI.ParticleContainer;
+		var RenderTexture = PIXI.RenderTexture;
+
+		Container.prototype.hide = function () {
+			this.children.forEach(function (child) {
+				child.lastEnabledState = child.enabled;
+				child.enabled = false;
+			});
+
+			this.visible = false;
+		};
+
+		Container.prototype.show = function () {
+			this.children.forEach(function (child) {
+				child.enabled = child.lastEnabledState;
+			});
+
+			this.visible = true;
+		};
+
+		/*==================================*/
+		/*									*/
+		/* RENDERER							*/
+		/*									*/
+		/*==================================*/
+		var renderer = PIXI.autoDetectRenderer(960, 539);
+		renderer.backgroundColor = '0xCCCCCC';
+
+		/*==================================*/
+		/*									*/
+		/* VIEWPORT							*/
+		/*									*/
+		/*==================================*/
+		var viewport = new Container();
+		var displayViewport = new Container();
+
+		/*==================================*/
+		/*									*/
+		/* TINK								*/
+		/*									*/
+		/*==================================*/
+		let tink = new Tink(PIXI, renderer.view);
+		let pointer = tink.makePointer();
+
+		var atlasPath = "/public/assets/atlas/primitive.json";
+		var space = new Container();
+
+		/* LOAD SPRITES */
+		PIXI.loader
+			.add(atlasPath)
+			.on('progress', function (loader, resource) {
+				console.log("Loaded: " + resource.url);
+
+				//Display the precentage of files currently loaded
+				console.log("progress: " + loader.progress + "%");
+			})
+			.load(function () {
+				var textures = PIXI.loader.resources[atlasPath].textures;
+				document.body.appendChild(renderer.view);
+
+				/*==================================*/
+				/*									*/
+				/* CREATE SPACE						*/
+				/*									*/
+				/*==================================*/
+				viewport.addChild(space);
+
+				/*==================================*/
+				/* DEFINE SECTIONS  				*/
+				/*==================================*/
+				var MAPSECTIONS = 11;
+				var VISIBLE_SECTIONS = 3;
+				var SECTIONWIDTH = 7;
+				var SECTIONHEIGHT = 7;
+				var UNIT = 32;
+				var SUBDIVISIONS = 3;
+				var SPACEWIDTH = UNIT * SECTIONWIDTH * MAPSECTIONS;
+				var SPACEHEIGHT = UNIT * SECTIONHEIGHT * MAPSECTIONS;
+				var GRIDTHICKNESS = 1;
+				var SUBDIVISIONSTHICKNESS = 3;
+				var AXISTHICKNESS = 5;
+				var CURRENTFRAME = 0;
+				var PLAYER_FRAME_TRIGGER_MOVEMENET = 1; //1 is the max speed, greater than that is slower
+
+				/*==================================*/
+				/*									*/
+				/* PLAYER							*/
+				/*									*/
+				/*==================================*/
+
+				function Player(x, y, vx, vy, texture) {
+					// Cap player position to the maximum if the position its ouside of the space boundaires
+					this.x = (Math.abs(x) > SECTIONWIDTH * MAPSECTIONS / 2 ? Math.floor(SECTIONHEIGHT * MAPSECTIONS / 2) : x);
+					this.y = (Math.abs(y) > SECTIONHEIGHT * MAPSECTIONS / 2 ? Math.floor(SECTIONHEIGHT * MAPSECTIONS / 2) : y);
+					this.vx = vx;
+					this.vy = vy;
+					this.sprite = new Sprite(texture);
+
+					this.sprite.x = (UNIT * SECTIONWIDTH * MAPSECTIONS - this.sprite.width) / 2 + (this.x * UNIT);
+					this.sprite.y = (UNIT * SECTIONHEIGHT * MAPSECTIONS - this.sprite.height) / 2 - (this.y * UNIT);
+
+					this.section = {
+						x: Math.round(this.x / SECTIONWIDTH),
+						y: Math.round(this.y / SECTIONWIDTH)
+					}
+				}
+
+				var player = new Player(0, 0, 0, 0, textures["liss.png"]);
+
+				/*==============================================*/
+				/* CREATE COLINDANT SECTIONS AROUND PLAYER		*/
+				/*==============================================*/
+				var LAYER_SECTIONS = {};
+				var ARRAY_OF_VISIBLE_SECTIONS = new Array();
+
+				for (var sectionX = player.section.x - Math.floor(VISIBLE_SECTIONS / 2); sectionX <= player.section.x + Math.floor(VISIBLE_SECTIONS / 2); sectionX++) {
+					for (var sectionY = player.section.y - Math.floor(VISIBLE_SECTIONS / 2); sectionY <= player.section.y + Math.floor(VISIBLE_SECTIONS / 2); sectionY++) {
+						if (!LAYER_SECTIONS[sectionX]) {
+							LAYER_SECTIONS[sectionX] = {};
+						}
+						LAYER_SECTIONS[sectionX][sectionY] = new Container();
+						LAYER_SECTIONS[sectionX][sectionY].x = (SPACEWIDTH - SECTIONWIDTH * UNIT) / 2 + sectionX * SECTIONWIDTH * UNIT;
+						LAYER_SECTIONS[sectionX][sectionY].y = (SPACEHEIGHT - SECTIONHEIGHT * UNIT) / 2 - sectionY * SECTIONHEIGHT * UNIT;
+
+						var grassSprite = new Sprite(textures["grass.png"]);
+						grassSprite.x = 0;
+						grassSprite.y = 0;
+						LAYER_SECTIONS[sectionX][sectionY].addChild(grassSprite);
+
+						for (var x = 0; x <= UNIT * SECTIONWIDTH; x += UNIT) {
+							let line = new Graphics();
+							let THICKNESS = (x == 0 || x == UNIT * SECTIONWIDTH ? SUBDIVISIONSTHICKNESS : GRIDTHICKNESS)
+							line.lineStyle(THICKNESS, 0xFFFFFF, 1);
+							line.moveTo(x, 0);
+							line.lineTo(x, SECTIONHEIGHT * UNIT);
+							LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+						}
+
+						for (var y = 0; y <= UNIT * SECTIONWIDTH; y += UNIT) {
+							let line = new Graphics();
+							let THICKNESS = (y == 0 || y == UNIT * SECTIONWIDTH ? SUBDIVISIONSTHICKNESS : GRIDTHICKNESS)
+							line.lineStyle(THICKNESS, 0xFFFFFF, 1);
+							line.moveTo(0, y);
+							line.lineTo(SECTIONWIDTH * UNIT, y);
+							LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+						}
+
+						if (sectionX == 0) {
+							let line = new Graphics();
+							line.lineStyle(AXISTHICKNESS, 0x00FF00, 1);
+							line.moveTo(SECTIONWIDTH * UNIT / 2, 0);
+							line.lineTo(SECTIONWIDTH * UNIT / 2, SECTIONHEIGHT * UNIT);
+							LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+						}
+
+						if (sectionY == 0) {
+							let line = new Graphics();
+							line.lineStyle(AXISTHICKNESS, 0xFF0000, 1);
+							line.moveTo(0, SECTIONHEIGHT * UNIT / 2);
+							line.lineTo(SECTIONWIDTH * UNIT, SECTIONHEIGHT * UNIT / 2);
+							LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+						}
+
+						ARRAY_OF_VISIBLE_SECTIONS.push(LAYER_SECTIONS[sectionX][sectionY]);
+						space.addChild(LAYER_SECTIONS[sectionX][sectionY]);
+					}
+				}
+
+				/*==================================================*/
+				/* REMOVE NON COLINDANT SECTIONS AROUND PLAYER		*/
+				/*==================================================*/
+
+				function hideNonColindantSections() {
+					for (var currentSection = ARRAY_OF_VISIBLE_SECTIONS.length - 1; currentSection >= 0; currentSection--) {
+						var visibleSection = ARRAY_OF_VISIBLE_SECTIONS[currentSection];
+						var visibleSectionX = visibleSection.x / SECTIONWIDTH / UNIT - Math.floor(MAPSECTIONS / 2);
+						var visibleSectionY = -visibleSection.y / SECTIONHEIGHT / UNIT + Math.floor(MAPSECTIONS / 2);
+						// console.log("Visible Section: " + visibleSectionX + ": " + visibleSectionY);
+
+						var deltaSectionX = Math.abs(player.section.x - visibleSectionX);
+						var deltaSectionY = Math.abs(player.section.y - visibleSectionY);
+						if (deltaSectionX > Math.floor(VISIBLE_SECTIONS / 2)) {
+							visibleSection.visible = false;
+							// Remove Section That are not visible anymore from the array of visible sections
+							ARRAY_OF_VISIBLE_SECTIONS.splice(currentSection, 1);
+						}
+						else if (deltaSectionY > Math.floor(VISIBLE_SECTIONS / 2)) {
+							visibleSection.visible = false;
+							// Remove Section That are not visible anymore from the array of visible sections
+							ARRAY_OF_VISIBLE_SECTIONS.splice(currentSection, 1);
+						}
+					}
+				}
+
+				/*==================================================*/
+				/* SHOW COLINDANT SECTIONS AROUND PLAYER			*/
+				/*==================================================*/
+
+				function showColindantSections() {
+					for (var sectionX = player.section.x - Math.floor(VISIBLE_SECTIONS / 2); sectionX <= player.section.x + Math.floor(VISIBLE_SECTIONS / 2); sectionX++) {
+						for (var sectionY = player.section.y - Math.floor(VISIBLE_SECTIONS / 2); sectionY <= player.section.y + Math.floor(VISIBLE_SECTIONS / 2); sectionY++) {
+							if (!LAYER_SECTIONS[sectionX]) {
+								LAYER_SECTIONS[sectionX] = {};
+								LAYER_SECTIONS[sectionX][sectionY] = new Container();
+								LAYER_SECTIONS[sectionX][sectionY].x = (SPACEWIDTH - SECTIONWIDTH * UNIT) / 2 + sectionX * SECTIONWIDTH * UNIT;
+								LAYER_SECTIONS[sectionX][sectionY].y = (SPACEHEIGHT - SECTIONHEIGHT * UNIT) / 2 - sectionY * SECTIONHEIGHT * UNIT;
+
+								var grassSprite = new Sprite(textures["grass.png"]);
+								grassSprite.x = 0;
+								grassSprite.y = 0;
+								LAYER_SECTIONS[sectionX][sectionY].addChild(grassSprite);
+
+								for (var x = 0; x <= UNIT * SECTIONWIDTH; x += UNIT) {
+									let line = new Graphics();
+									let THICKNESS = (x == 0 || x == UNIT * SECTIONWIDTH ? SUBDIVISIONSTHICKNESS : GRIDTHICKNESS)
+									line.lineStyle(THICKNESS, 0xFFFFFF, 1);
+									line.moveTo(x, 0);
+									line.lineTo(x, SECTIONHEIGHT * UNIT);
+									LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+								}
+
+								for (var y = 0; y <= UNIT * SECTIONWIDTH; y += UNIT) {
+									let line = new Graphics();
+									let THICKNESS = (y == 0 || y == UNIT * SECTIONWIDTH ? SUBDIVISIONSTHICKNESS : GRIDTHICKNESS)
+									line.lineStyle(THICKNESS, 0xFFFFFF, 1);
+									line.moveTo(0, y);
+									line.lineTo(SECTIONWIDTH * UNIT, y);
+									LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+								}
+
+								if (sectionX == 0) {
+									let line = new Graphics();
+									line.lineStyle(AXISTHICKNESS, 0x00FF00, 1);
+									line.moveTo(SECTIONWIDTH * UNIT / 2, 0);
+									line.lineTo(SECTIONWIDTH * UNIT / 2, SECTIONHEIGHT * UNIT);
+									LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+								}
+
+								if (sectionY == 0) {
+									let line = new Graphics();
+									line.lineStyle(AXISTHICKNESS, 0xFF0000, 1);
+									line.moveTo(0, SECTIONHEIGHT * UNIT / 2);
+									line.lineTo(SECTIONWIDTH * UNIT, SECTIONHEIGHT * UNIT / 2);
+									LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+								}
+
+								ARRAY_OF_VISIBLE_SECTIONS.push(LAYER_SECTIONS[sectionX][sectionY]);
+								space.addChild(LAYER_SECTIONS[sectionX][sectionY]);
+							}
+							else if (!LAYER_SECTIONS[sectionX][sectionY]) {
+								LAYER_SECTIONS[sectionX][sectionY] = new Container();
+								LAYER_SECTIONS[sectionX][sectionY].x = (SPACEWIDTH - SECTIONWIDTH * UNIT) / 2 + sectionX * SECTIONWIDTH * UNIT;
+								LAYER_SECTIONS[sectionX][sectionY].y = (SPACEHEIGHT - SECTIONHEIGHT * UNIT) / 2 - sectionY * SECTIONHEIGHT * UNIT;
+
+								var grassSprite = new Sprite(textures["grass.png"]);
+								grassSprite.x = 0;
+								grassSprite.y = 0;
+								LAYER_SECTIONS[sectionX][sectionY].addChild(grassSprite);
+
+								for (var x = 0; x <= UNIT * SECTIONWIDTH; x += UNIT) {
+									let line = new Graphics();
+									let THICKNESS = (x == 0 || x == UNIT * SECTIONWIDTH ? SUBDIVISIONSTHICKNESS : GRIDTHICKNESS)
+									line.lineStyle(THICKNESS, 0xFFFFFF, 1);
+									line.moveTo(x, 0);
+									line.lineTo(x, SECTIONHEIGHT * UNIT);
+									LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+								}
+
+								for (var y = 0; y <= UNIT * SECTIONWIDTH; y += UNIT) {
+									let line = new Graphics();
+									let THICKNESS = (y == 0 || y == UNIT * SECTIONWIDTH ? SUBDIVISIONSTHICKNESS : GRIDTHICKNESS)
+									line.lineStyle(THICKNESS, 0xFFFFFF, 1);
+									line.moveTo(0, y);
+									line.lineTo(SECTIONWIDTH * UNIT, y);
+									LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+								}
+
+								if (sectionX == 0) {
+									let line = new Graphics();
+									line.lineStyle(AXISTHICKNESS, 0x00FF00, 1);
+									line.moveTo(SECTIONWIDTH * UNIT / 2, 0);
+									line.lineTo(SECTIONWIDTH * UNIT / 2, SECTIONHEIGHT * UNIT);
+									LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+								}
+
+								if (sectionY == 0) {
+									let line = new Graphics();
+									line.lineStyle(AXISTHICKNESS, 0xFF0000, 1);
+									line.moveTo(0, SECTIONHEIGHT * UNIT / 2);
+									line.lineTo(SECTIONWIDTH * UNIT, SECTIONHEIGHT * UNIT / 2);
+									LAYER_SECTIONS[sectionX][sectionY].addChild(line);
+								}
+
+								ARRAY_OF_VISIBLE_SECTIONS.push(LAYER_SECTIONS[sectionX][sectionY]);
+								space.addChild(LAYER_SECTIONS[sectionX][sectionY]);
+							} else if (!LAYER_SECTIONS[sectionX][sectionY].visible) {
+								ARRAY_OF_VISIBLE_SECTIONS.push(LAYER_SECTIONS[sectionX][sectionY]);
+								LAYER_SECTIONS[sectionX][sectionY].visible = true;
+							}
+						}
+					}
+				}
+
+				/*==================================*/
+				/* DRAW SPACE BOUNDARIES 			*/
+				/*==================================*/
+
+				var bounds = new Graphics();
+				bounds.lineStyle(1, 0x0000ff, 1);
+				bounds.drawRect(0, 0, SPACEWIDTH, SPACEHEIGHT);
+				space.addChild(bounds);
+
+				/*==================================*/
+				/* SECTION MASK 					*/
+				/*==================================*/
+
+				let SECTION_MASK = new Graphics();
+				SECTION_MASK.drawRect((renderer.width - UNIT * SECTIONWIDTH * (VISIBLE_SECTIONS - 1)) / 2, (renderer.height - UNIT * SECTIONHEIGHT * (VISIBLE_SECTIONS - 1)) / 2, UNIT * SECTIONWIDTH * (VISIBLE_SECTIONS - 1), UNIT * SECTIONHEIGHT * (VISIBLE_SECTIONS - 1));
+				space.mask = SECTION_MASK;
+
+				// space.x = (renderer.width - SPACEWIDTH)/2;
+				// space.y = (renderer.height - SPACEHEIGHT)/2;
+
+
+				/*==================================*/
+				/* DRAW PLAYER 	 					*/
+				/*==================================*/
+
+				space.addChild(player.sprite);
+
+				/*==================================*/
+				/*									*/
+				/* MOVE PLAYER 						*/
+				/*									*/
+				/*==================================*/
+
+				var keyW = keyboard('W'.charCodeAt(0));
+				var keyA = keyboard('A'.charCodeAt(0));
+				var keyS = keyboard('S'.charCodeAt(0));
+				var keyD = keyboard('D'.charCodeAt(0));
+
+				keyW.press = function () {
+					CURRENTFRAME = 0;
+					player.vy -= 1;
+				};
+				keyA.press = function () {
+					CURRENTFRAME = 0;
+					player.vx -= 1;
+				};
+				keyS.press = function () {
+					CURRENTFRAME = 0;
+					player.vy += 1;
+				};
+				keyD.press = function () {
+					CURRENTFRAME = 0;
+					player.vx += 1;
+				};
+
+				keyW.release = function () {
+					player.vy += 1;
+				};
+				keyA.release = function () {
+					player.vx += 1;
+				};
+				keyS.release = function () {
+					player.vy -= 1;
+				};
+				keyD.release = function () {
+					player.vx -= 1;
+				};
+
+				function keyboard(keyCode) {
+					var key = {};
+					key.code = keyCode;
+					key.isDown = false;
+					key.isUp = true;
+					key.press = undefined;
+					key.release = undefined;
+					//The `downHandler`
+					key.downHandler = function (event) {
+						if (event.keyCode === key.code) {
+							if (key.isUp && key.press) key.press();
+							key.isDown = true;
+							key.isUp = false;
+						}
+						event.preventDefault();
+					};
+
+					//The `upHandler`
+					key.upHandler = function (event) {
+						if (event.keyCode === key.code) {
+							if (key.isDown && key.release) key.release();
+							key.isDown = false;
+							key.isUp = true;
+						}
+						event.preventDefault();
+					};
+
+					//Attach event listeners
+					window.addEventListener(
+						"keydown", key.downHandler.bind(key), false
+					);
+					window.addEventListener(
+						"keyup", key.upHandler.bind(key), false
+					);
+					return key;
+				}
+
+				function movePlayer() {
+					if (CURRENTFRAME % PLAYER_FRAME_TRIGGER_MOVEMENET != 0) {
+						return;
+					}
+
+					var playerHasMoved = false;
+
+					if (player.vx) {
+						var nextX = player.x + player.vx;
+						if (nextX >= SECTIONWIDTH * MAPSECTIONS * -0.5 && nextX < SECTIONWIDTH * MAPSECTIONS * 0.5) {
+							player.x += player.vx;
+							player.sprite.x += player.vx * UNIT;
+							playerHasMoved = true;
+						}
+					}
+
+					if (player.vy) {
+						var nextY = player.y - player.vy;
+						if (nextY >= SECTIONWIDTH * MAPSECTIONS * -0.5 && nextY < SECTIONWIDTH * MAPSECTIONS * 0.5) {
+							player.y -= player.vy;
+							player.sprite.y += player.vy * UNIT;
+							playerHasMoved = true;
+						}
+					}
+
+					player.section = {
+						x: Math.round(player.x / SECTIONWIDTH),
+						y: Math.round(player.y / SECTIONWIDTH)
+					}
+
+					if (playerHasMoved) {
+						hideNonColindantSections();
+						showColindantSections();
+						space.addChild(bounds);
+						space.addChild(player.sprite);
+					}
+				}
+
+				/*==================================*/
+				/*									*/
+				/* SPACE COORDS						*/
+				/*									*/
+				/*==================================*/
+
+				var spaceCoords = new Text("player(" + player.x + ", " + player.y + "), space[" + SECTIONWIDTH * MAPSECTIONS + ", " + SECTIONHEIGHT * MAPSECTIONS + "]", { font: "12px Serif", fill: "black" });
+				spaceCoords.x = 20;
+				spaceCoords.y = renderer.height - spaceCoords.height - 20;
+				viewport.addChild(spaceCoords);
+
+				function updateSpaceCoords() {
+					spaceCoords.text = "player(" + player.x + ", " + player.y + "), player.section(" + player.section.x + ", " + player.section.y + "), space[" + SECTIONWIDTH * MAPSECTIONS + ", " + SECTIONHEIGHT * MAPSECTIONS + "]" + " Frame: " + CURRENTFRAME;
+				}
+
+				/*==================================*/
+				/*									*/
+				/* CAMERA FOLLOW					*/
+				/*									*/
+				/*==================================*/
+
+				// Old function, it gets the center of the space, the center of the viepowrt, and it centers the center of the space in the center of the viewport
+				// then it substracts the amount of pixels the player its moved from the origin, or adds if the player its in negative coordinates
+				// function followPlayer(){
+				// 	space.x = -(SPACEWIDTH - renderer.width)/2 - ((player.sprite.x - (SPACEWIDTH - player.sprite.width)/2));
+				// 	space.y = -(SPACEHEIGHT - renderer.height)/2 - (player.sprite.y - (SPACEHEIGHT - player.sprite.height)/2); 
+				// }
+
+				// New function, we get the position of the sprite, and we set the space origin in that place, plus half of the sprite size all in the opposite direction
+
+				function followPlayer() {
+					space.x = (renderer.width - SPACEWIDTH) / 2 - player.x * UNIT,
+						space.y = (renderer.height - SPACEHEIGHT) / 2 + player.y * UNIT
+				}
+
+				/*==================================*/
+				/*									*/
+				/* BACK BUFFER 						*/
+				/*									*/
+				/*==================================*/
+
+				// let backBuffer = RenderTexture.create(960, 539);
+				// renderer.render(viewport, backBuffer);
+				// let viewportSprite = new Sprite(backBuffer);
+				// displayViewport.addChild(viewportSprite);
+
+				/*==================================*/
+				/*									*/
+				/* GAME LOOP 						*/
+				/*									*/
+				/*==================================*/
+				function loop() {
+					requestAnimationFrame(loop);
+					tink.update();
+					if (CURRENTFRAME > 59) {
+						CURRENTFRAME = 0;
+					}
+
+					movePlayer();
+					followPlayer();
+					updateSpaceCoords();
+
+					// Draw to back buffer
+					// renderer.render(viewport, backBuffer);
+
+					// Draw to front buffer (Canvas)
+					renderer.render(viewport);
+
+					CURRENTFRAME += 1;
+				}
+
+				loop();
+			});
+	</script>
+
+	<p>
+		Move with WASD
+
+		The terrain is divided by basic squares, and grouped into bigger squares called sections
+		Sections are loaded dynamically based on players position, sorry for the black square, the original sprite
+		was not mine and was not allowed to distributed it, you can find the primitive.png in the public folder end edit
+		the black square with your own sprite.
+
+		You can edit the visible sections, how they are divided and how big they are.
+		Notice that if you show a lot of sections or make them too big. The game freezes a little while loading
+		the sections colindant to the section your player is. Lowering the size of visible sections and their size
+		prevents this, but this is very sketchy code. Maybe there is a better way to do this, i did this code trying to
+		solve my performance issue when loading big terrains.
+	</p>
+</body>
+
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "demos",
+  "version": "1.0.0",
+  "description": "game demos",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Juan de Dios Gonzalez Salazar",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "jquery": "^3.4.1",
+    "pixi.js": "^5.1.3"
+  }
+}

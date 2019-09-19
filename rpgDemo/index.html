@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+
+<html>
+	<head>
+		<!-- <script type="text/javascript" src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script> -->
+		<script type="text/javascript" src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+		<script type="text/javascript" src="jquery.ui.position.min.js"></script>
+		<script type="text/javascript" src="jquery.contextMenu.min.js"></script>
+
+		<link href="./jquery.contextMenu.min.css" type="text/css" rel="stylesheet" />
+
+		<script type="text/javascript">
+			var red = 'background: #222222; color: #ff0000';
+			var green = 'background: #222222; color: #00ff00';
+			var blue = 'background: #222222; color: #0000ff';
+			var yellow = 'background: #222222; color: #ffff00';
+			var cyan = 'background: #222222; color: #00ffff';
+			var magenta = 'background: #222222; color: #ff00ff';
+			var black = 'background: #dddddd; color: #ffffff';
+			var white = 'background: #222222; color: #ffffff';
+
+			let stock = null;
+			let resource = null;
+			let creature = null;
+			let player = null;
+			let items = null;
+
+			function Creature(creatureLevel){
+				this.level = creatureLevel;
+				this.hp = getRandomInt(Math.ceil(this.level * 10 * this.level * 0.1), Math.ceil(this.level * 10 * (1 + (this.level * 0.1))));
+				this.phyisicalDamage = getRandomInt(Math.ceil(this.level * 2 * this.level * 0.1), Math.ceil(this.level * 2 * (1 + (this.level * 0.1))));
+			}
+
+			function getRandomInt(min, max) {
+				min = Math.ceil(min);
+				max = Math.floor(max);
+				return Math.floor(Math.random() * (max - min + 1)) + min; //The maximum is inclusive and the minimum is inclusive 
+			}
+			
+			function getResource(){
+				for(resource in player.stock){
+					player.stock[resource] += 1000;
+				}
+			}
+
+			function createCreature(){
+				if(creature){
+					return;
+				}
+
+				var creatureLevel = getRandomInt(Math.ceil(player.level * player.level / 100), Math.ceil(player.level * ((player.level / 100) + 1)));
+
+				creature = new Creature(creatureLevel);
+				$('[data-creature]').show().removeClass('hidden');
+				$('[data-gatter]').prop('disabled', true);
+			}
+
+			$(function(){
+
+				function Item(item){
+					this.id = item.id ? item.id : 0;
+					this.name = item.name ? item.name : 'Unnamed';
+					this.desc = item.desc ? item.desc : 'No description';
+					this.price = item.price ? item.price : 0;
+					this.active = item.active ? item.active : null;
+					this.chargeActivable = item.chargeActivable ? true : false;
+					this.charges = item.charges ? item.charges : 0;
+					this.rechargable = item.rechargable ? item.rechargable : false;
+					this.rechargePrice = item.rechargePrice ? item.rechargePrice : false;
+					this.recharge = item.recharge ? item.recharge : null;
+					this.infiniteCharges = item.infiniteCharges ? item.infiniteCharges : false;
+					this.maxCharges = item.maxCharges ? item.maxCharges : 0;
+					this.consumable = item.consumable ? item.consumable : false;
+					this.onEnemyAttack = item.onEnemyAttack ? item.onEnemyAttack : null;
+					this.bonus = item.bonus ? item.bonus : null;
+				}
+
+				function Resource(){
+					this.gatter = {
+						wood: function(){
+							stock.wood += 8;
+							$('[data-gatter-wood]').prop('disabled', true);
+							setTimeout(function(){
+								$('[data-gatter-wood]').attr('disabled', false);
+							}, 5000);
+						},
+						water: function(){
+							stock.water += 4;
+							$('[data-gatter-water]').prop('disabled', true);
+							setTimeout(function(){
+								$('[data-gatter-water]').attr('disabled', false);
+							}, 5000);
+						},
+						food: function(){
+							stock.food += 6;
+							$('[data-gatter-food]').prop('disabled', true);
+							setTimeout(function(){
+								$('[data-gatter-food]').attr('disabled', false);
+							}, 5000);
+						}
+					}
+				}
+
+				function Stock(){
+					this.wood = 0;
+					this.water = 0;
+					this.food = 0;
+				}
+
+
+				Creature.prototype = {
+					attack: function(player){
+						if(player.evasion){
+							var targetEvasionProcs = getRandomInt(1, 100);
+
+							if(targetEvasionProcs > 0 && targetEvasionProcs <= player.evasion){
+								console.log('%cPlayer:%c Dodge attack', 'color: cyan', 'color: white');
+								return;
+							}
+						}
+
+						var damageMultiplier = 1;
+						if(player.armor){
+							damageMultiplier = 1 - (0.05 * player.armor / (1 + 0.05 * Math.abs(player.armor)))
+						}
+
+						var damage = Math.floor(creature.phyisicalDamage * damageMultiplier);
+
+						console.log('%cCreature > Player:%c ' + damage + ' damage', 'color: magenta', 'color: white');
+						if(damageMultiplier > 1){
+							console.log('%cPlayer:%c Took %camplified%c phyisical damage from %c' + creature.phyisicalDamage + '%c -> %c' + damage, 'color: magenta', 'color: white', 'color: red', 'color: white', 'color: yellow', 'color: white', 'color: yellow');
+						}else if(damageMultiplier < 1){
+							console.log('%cPlayer:%c Took %creduced%c phyisical damage from %c' + creature.phyisicalDamage + '%c -> %c' + damage, 'color: cyan', 'color: white', 'color: #00ff00', 'color: white', 'color: yellow', 'color: white', 'color: yellow');
+						}
+
+						player.hp -= damage;
+
+						// Verificar si el ataque activa algun item del target
+						player.inventory.forEach((item, indexItem) => {
+							item.onEnemyAttack ? item.onEnemyAttack(indexItem) : false;
+						});
+					}
+				};
+
+				function Player(baseHP, phyisicalDamage, stock){
+					this.level = 1;
+					this.baseHP = baseHP;
+					this.hp = this.baseHP;
+					this.maxHP = this.level * baseHP;
+					this.phyisicalDamage = phyisicalDamage;
+					this.stock = stock;
+					this.xpForNextLevel = this.level;
+					this.xpStored = 0;
+					this.thirst = 0;
+					this.hunger = 0;
+					this.evasion = 0;
+					this.lifeSteal = 1;
+					this.armor = 1;
+					this.criticalChance = 1;
+					this.criticalMult = 2;
+					this.attackModifiers = [];
+					this.inventory = [];
+					this.strength = 1;
+					this.agility = 1;
+					this.intelligence = 1;
+				}
+
+				Player.prototype = {
+					attack: function(creature){
+						var damage = 0;
+
+						/* Critical Modifier */
+						if(player.criticalChance){
+							var criticalProc = getRandomInt(1, 100);
+
+							if(criticalProc > 0 && criticalProc <= this.criticalChance){
+								damage = this.criticalMult * this.phyisicalDamage;
+								console.log('%cPlayer > Creature: %cCritical ' + damage + ' damage', 'color: cyan', 'color: #ff0000');
+							}else{
+								damage = this.phyisicalDamage;
+							 	console.log('%cPlayer > Creature: %c' + damage + ' damage', 'color: cyan', 'color: white');
+							}
+						}
+
+						/* Lifestael Modifier */
+						if(player.lifeSteal){
+							var lifeSteal = Math.ceil(player.lifeSteal / 100 * damage);
+							console.log('%cPlayer: %cLifesteal ' + lifeSteal + ' HP', 'color: cyan', 'color: #00ff00');
+						}
+
+						let expiredModifiers = [];
+
+						/* Attack modifiers */
+						this.attackModifiers.forEach((attack, indexModifier) => {
+							attack.modifier();
+
+							if(attack.charges){
+								--attack.charges;
+								console.log('%cPlayer:%c ' + attack.name + ' has ' + attack.charges + ' charges left.', 'color: cyan', 'color: white');
+								if(!attack.charges){
+									expiredModifiers.push(indexModifier);
+								}
+							}
+						});
+
+						expiredModifiers.forEach((indexModifier) => {
+							player.attackModifiers.splice(indexModifier, 1);
+						});
+
+						creature.hp -= damage;
+						creature.hp = creature.hp > 0 ? creature.hp : 0;
+						player.hp += lifeSteal;
+						player.hp = player.hp > player.maxHP ? player.maxHP : player.hp;
+					}
+				};
+				stock = new Stock();
+				resource = new Resource();
+				creature = null;
+				player = new Player(10, 2, stock);
+
+				$('[data-gatter-wood]').on('click', function(){
+					resource.gatter.wood();
+				});
+
+				$('[data-gatter-water]').on('click', function(){
+					resource.gatter.water();
+				});
+
+				$('[data-gatter-food]').on('click', function(){
+					resource.gatter.food();
+				});
+
+				setInterval(function(){
+					if(creature){
+						return;
+					}
+
+					var probability = 4;
+					var dice = getRandomInt(1, 100);
+
+					if(dice > 0 && dice <= probability){
+						var creatureLevel = getRandomInt(Math.ceil(player.level * player.level / 100), Math.ceil(player.level * ((player.level / 100) + 1)));
+
+						creature = new Creature(creatureLevel);
+						$('[data-creature]').show().removeClass('hidden');
+						$('[data-gatter]').prop('disabled', true);
+					}
+				}, 1000);
+
+				$('[data-player-attack]').on('click', function(){
+					if(creature){
+						console.log();
+						console.log('================');
+						console.log('%cPlayer\'s HP: %c' + player.hp + '/' + player.maxHP, 'color: cyan', 'color: white');
+						console.log('%cCreature\'s HP: %c' + creature.hp, 'color: magenta', 'color: white');
+						console.log('-------');
+						creature.attack(player);
+						player.attack(creature);
+
+						if(player.hp <= 0){
+							alert('You are dead!');
+							location.href = "";
+						}
+
+						console.log('-------');
+						console.log('%cPlayer\'s HP: %c' + player.hp + '/' + player.maxHP, 'color: cyan', 'color: white');
+						console.log('%cCreature\'s HP: %c' + creature.hp, 'color: magenta', 'color: white');
+
+						if(creature.hp <= 0){
+							delete creature;
+							creature = null;
+							$('[data-creature]').hide();
+							$('[data-gatter]').prop('disabled', false);
+							player.xpStored += 1;
+							if(player.xpForNextLevel >= player.xpStored){
+								player.xpForNextLevel += 1;
+								player.xpStored = 0;
+								player.level += 1;
+								player.maxHP = player.baseHP * player.level;
+							}
+							console.log('%cCreature:%c Dies!', 'color: magenta', 'color: red');
+						}
+						console.log('================');
+						console.log();
+					}
+				});
+
+				setInterval(function(){
+					player.thirst += 1;
+					if(player.thirst > 100){
+						alert('You died from thirst!');
+						location.href = "";
+					}
+				},5000);
+
+				setInterval(function(){
+					player.hunger += 1;
+					if(player.hunger > 100){
+						alert('You died from hunger');
+						location.href = "";
+					}
+				}, 10000)
+
+				$('[data-player-drink]').on('click', function(){
+					if(stock.water >= 5){
+						stock.water -= 5;
+						player.thirst = ((player.thirst - 5) > 0 ? player.thirst - 5 : 0);
+					}
+				});
+
+				$('[data-player-eat]').on('click', function(){
+					if(stock.food >= 5){
+						stock.food -= 5;
+						player.hunger = ((player.hunger - 5) > 0 ? player.hunger - 5 : 0);
+					}
+				});
+
+				/*-----------------------*/
+				/* ITEM CREATION */
+				/*-----------------------*/
+
+				items = {
+					1: new Item({
+						id: 1,
+						name: 'Faerie Fire', 
+						desc: 'Heals 4 hp',
+						price: [
+							{resource: 'wood', amount: 2},
+							{resource: 'water', amount: 1}
+						],
+						active: function(target){
+							target.hp += 4;
+							target.hp = target.hp > target.maxHP ? target.maxHP : target.hp;
+							console.log('%cPlayer:%c Faerie Fire heals 4 HP', 'color: cyan', 'color: #00ff00');
+						},
+						consumable: true
+					}),
+					2: new Item({
+						id: 2,
+						name: 'Tango', 
+						desc: 'Heals 1 hp each attack for 7 attacks',
+						price: [
+							{resource: 'wood', amount: 3},
+							{resource: 'water', amount: 2}
+						],
+						active: function(target){
+							target.attackModifiers.push({
+								name: 'Tango',
+								charges: 5,
+								modifier: function(){
+									target.hp += 1;
+									target.hp = target.hp > target.maxHP ? target.maxHP : target.hp;
+									console.log('%cPlayer:%c Tango heals 1 HP', 'color: cyan', 'color: #00ff00');
+								}
+							});
+						},
+						consumable: true
+					}),
+					3: new Item({
+						id: 3,
+						name: 'Healing Salve',
+						desc: 'Heals 4 HP each attack for 3 attacks',
+						price: [
+							{resource: 'water', amount: 6}
+						],
+						active: function(target){
+							target.attackModifiers.push({
+								name: 'Healing Salve',
+								charges: 3,
+								modifier: function(){
+									target.hp += 4;
+									target.hp = target.hp > target.maxHP ? target.maxHP : target.hp;
+									console.log('%cPlayer:%c Healing Salve heals 4 HP', 'color: cyan', 'color: #00ff00');
+								}
+							});
+						},
+						consumable: true
+					}),
+					4: new Item({
+						id: 4,
+						name: 'Tome Of Knowledge',
+						desc: 'Increases 2 XP',
+						price: [
+							{resource: 'wood', amount: 1},
+							{resource: 'food', amount: 3},
+						],
+						active: function(target){
+							target.xpStored += 2;
+							console.log('%cPlayer:%c Tome Of Knowledge gives +2 XP', 'color: cyan', 'color: gold');
+							while(target.xpStored >= target.xpForNextLevel){
+								target.level += 1;
+								console.log('%cPlayer:%c Leveled up', 'color: cyan', 'color: white');
+								console.log('%cPlayer:%c Level ' + target.level, 'color: cyan', 'color: white');
+								target.maxHP = target.level * target.baseHP;
+								target.xpStored -= target.xpForNextLevel;
+								target.xpForNextLevel = target.level;
+							}
+							console.log('%cPlayer:%c Current XP: ' + target.xpStored + '/' + target.xpForNextLevel , 'color: cyan', 'color: white');
+						},
+						consumable: true
+					}),
+					5: new Item({
+						id: 5,
+						name: 'Bottle',
+						desc: 'Heal 1 hp for 10 attacks for each charge, comes with 3 charges and can be recharged with 15 water',
+						price: [
+							{resource: 'wood', amount: 5},
+							{resource: 'water', amount: 15}
+						],
+						active: function(target){
+							target.attackModifiers.push({
+								name: 'Bottle',
+								charges: 10,
+								modifier: function(){
+									target.hp += 1;
+									target.hp = target.hp > target.maxHP ? target.maxHP : target.hp;
+									console.log('%cPlayer:%c Bottle heals 1 HP', 'color: cyan', 'color: #00ff00');
+								}
+							});
+
+							--this.charges;
+						},
+						charges: 3,
+						maxCharges: 3,
+						chargeActivable: true,
+						rechargable: true,
+						rechargePrice: [
+							{resource: 'water', amount: 15}
+						],
+						recharge: function(){
+							this.charges = 3;
+						}
+					}),
+					6: new Item({
+						id: 6,
+						name: 'Magic Stick',
+						desc: 
+							'Active: Restores 30 HP for each charge stored.<br />' + 
+							'Passive: Gains a charge for each attack you receive. Max 10 charges.',
+						price: [
+							{resource: 'wood', amount: 15},
+							{resource: 'water', amount: 15}
+						],
+						charges: 0,
+						maxCharges: 15,
+						chargeActivable: true,
+						onEnemyAttack: function(){
+							if(this.charges < 15){
+								++this.charges;
+							}
+							let indexItem = player.inventory.indexOf(this);
+							console.log('Player: ' + this.name + ' receives 1 charge for receiving an enemy attack.');
+							$('[data-inventory] [data-item]').eq(indexItem).text(this.name + '(' + this.charges + '/' + this.maxCharges + ')');
+						},
+						active: function(target){
+							target.hp += this.charges * 30;
+							target.hp = target.hp > target.maxHP ? target.maxHP : target.hp;
+							console.log('%cPlayer:%c Heals ' + (this.charges * 30) + ' HP!', 'color: cyan', 'color: white');
+							this.charges = 0;
+						}
+					}),
+					7: new Item({
+						id:7,
+						name: 'Iron Branch',
+						desc: 
+							'Active: Consume the branch, so you get 1 hp each attack for 5 attacks' + 
+							'Bonus: +1 All attributes',
+						price: [
+							{resource: 'wood', amount: 1},
+							{resource: 'water', amount: 1},
+						],
+						consumable: true,
+						bonus: [
+							{stat: 'strength', amount: 1},
+							{stat: 'agility', amount: 1},
+							{stat: 'intelligence', amount: 1},
+						],
+						active: function(target){
+							target.attackModifiers.push({
+								name: 'Iron Branch',
+								charges: 5,
+								modifier: function(){
+									target.hp += 1;
+									target.hp = target.hp > target.maxHP ? target.maxHP : target.hp;
+									console.log('%cPlayer:%c Iron Branch heals 1 HP', 'color: cyan', 'color: #00ff00');
+								}
+							});
+						}
+					})
+				};
+
+				function getItemHTML(item, hasOwner = false){
+					let itemHTML = 
+						'<div class="tooltip-parent flex-col">' +
+							'<button data-item="_ITEM_NAME_" data-item-id="' + item.id + '">_ITEM_NAME_</button>' +
+							'<div class="tooltip-bottom">' +
+								'<h6>_ITEM_NAME_</h6>' +
+								'_ITEM_PRICE_' +
+								'<p>_ITEM_DESC_</p>' +
+							'</div>';
+						'</div>';
+
+					let price = '';
+
+					let itemDesc = item.rechargable ? item.desc + '<p style="color: #ff00ff">Repurchase item to recharge.</span>' : item.desc;
+
+					// El item tiene propietario?
+					let itemName = '';
+
+					if(hasOwner){
+						// Si, tiene propietario
+						// El item se activa con cargas?
+						if(item.chargeActivable){
+							// Si se activa con cargas
+							// Tiene un máximo de cargas?
+							if(item.infiniteCharges){
+								// Cargas infinitas
+								itemName = item.name + '(' + item.charges + ')';
+							}else{
+								// Máximo de cargas
+								itemName = item.name + '('+ item.charges + '/' + item.maxCharges + ')';
+							}
+						}else{
+							//El item no es de cargas
+							itemName = item.name;
+						}
+					}else{
+						// No tiene propietario, mostrar precios
+						itemName = item.name;
+
+						price += '<span>Cost:</span>';
+						price += '<ul>';
+						item.price.forEach((cost) => {
+							price += '<li>' + cost.resource + ': ' + cost.amount +'</li>';
+						});
+						price += '</ul>';
+
+						if(item.rechargable){
+							price += '<span>Recharge Cost:</span>';
+							price += '<ul>';
+							item.rechargePrice.forEach((cost) => {
+								price += '<li>' + cost.resource + ': ' + cost.amount +'</li>';
+							});
+							price += '</ul>';
+						}
+					}
+
+					itemHTML = itemHTML.replace(/_ITEM_NAME_/g, itemName);
+					itemHTML = itemHTML.replace(/_ITEM_PRICE_/g, price);
+					itemHTML = itemHTML.replace(/_ITEM_DESC_/g, itemDesc);
+
+					return itemHTML;
+				}
+
+				// Pintar items en la tienda
+				for(let idItem in items){
+					let item = items[idItem];
+					let itemHTML = getItemHTML(item);
+
+					$('[data-items]').append(itemHTML);
+				};
+
+				// Comprar items y hacer recargas
+				$('[data-store] [data-item]').on('click', function(){
+
+					// Obtenemos el item que quiere comprar
+					let idItem = $(this).data('item-id');
+					let item = items[idItem];
+
+					let legend = '-----[' + item.name + ']-----';
+					console.log(legend);
+
+					// El item que quiere comprar, es un item recargable?
+					if(item.rechargable){
+						// Si, el item es recargable
+						// Tiene el item en su inventario?
+						let item = player.inventory.find((item) => {
+							return item.id == idItem;
+						});
+
+						if(item){
+							// Si tiene el item en inventario
+							// Puede costear la recarga?
+							let purchasable = item.rechargePrice.every((cost) => {
+								if(player.stock[cost.resource] < cost.amount){
+									console.log('Necesitas +' + (cost.amount - player.stock[cost.resource]) + ' [' + cost.resource + '] to recharge ' + item.name);
+									return false;
+								}
+
+								return true;
+							});
+							console.log('Recharged?: ' + purchasable);
+							console.log('-'.repeat(legend.length));
+							console.log('');
+
+							if(purchasable){
+								// Si, puede comprar la recarga
+								// Cobrar recursos
+								item.rechargePrice.forEach((cost) => {
+									player.stock[cost.resource] -= cost.amount;
+								});
+
+								// Recargar item y terminar procedure
+								item.recharge();
+								$('[data-inventory] [data-item-id="' + idItem + '"]').text(item.name + '(' + item.charges + '/' + item.maxCharges + ')');
+								return;
+							}
+							// No puede comprar la recarga, retornamos
+							return;
+						}
+					}
+
+					// No es recargable, continuamos con la compra normal
+					// Tiene espacio en el inventario? (Nota, checo si tiene el inventario lleno despu'es de las recargas, porque puede que tenga
+					// el inventario lleno pero items de recargas que si puede comprar aunque est'e lleno)
+					if(player.inventory.length >= 6){
+						// El inventario está lleno
+						console.log('Player: Tu inventario está lleno.');
+						return;
+					}
+
+					// Puede costearlo?
+					let purchasable = item.price.every((cost) => {
+						if(player.stock[cost.resource] < cost.amount){
+							console.log('Necesitas +' + (cost.amount - player.stock[cost.resource]) + ' [' + cost.resource + ']');
+							return false;
+						}
+
+						return true;
+					});
+					console.log('purchasable: ' + purchasable);
+					console.log('-'.repeat(legend.length));
+					console.log('');
+
+					if(purchasable){
+						// Si puede comprarlo
+						// Creamos una copia del item para darselo al jugador
+						let item = Object.assign({}, items[idItem]);
+
+						item.price.forEach((cost) => {
+							player.stock[cost.resource] -= cost.amount;
+						});
+
+						player.inventory.push(item);
+						// Aplica un bonus este item
+						if(item.bonus){
+							item.bonus.forEach((bonus) => {
+								player[bonus.stat] += bonus.amount;
+
+								switch(bonus.stat){
+									case 'strength':
+										player.baseHP += bonus.amount * 10;
+										player.maxHP = player.baseHP;
+									break;
+									case 'agility':
+										player.evasion = ((player.agility) / (player.agility + 100 )) * 100;
+										return;
+									break;
+									case 'intelligence':
+
+									break;
+								}
+							});
+						}
+
+						let itemHTML = getItemHTML(item, true);
+						$('[data-inventory]').append(itemHTML);
+					}
+					
+				});
+
+				/* PROGRAMMING TRIGGER ITEM active */
+				$(document).on('click', '[data-inventory] [data-item]', function(){
+					let idItem = $(this).data('item-id');
+					let itemIndex = $('[data-inventory] [data-item]').index(this);
+					let item = player.inventory[itemIndex];
+
+					// El item tiene una habilidad activable?
+
+					if(!item.active){
+						// No, entonces este item no hace nada
+						return;
+					}
+
+					// Si, el item tiene una habilidad activable
+					// El item es consumible?
+					if(item.consumable){
+						// Si, es consumible
+
+						// Se activa con cargas?
+						if(item.chargeActivable){
+							// Si, se activa con cargas
+							// Consumir 1 carga
+							--item.charges;
+							// Le quedan cargas?
+							if(item.charges){
+								// Si, le quedan cargas
+								console.log('Player: uses ' + item.name + ' ' + item.charges + ' charges left.');
+								$(this).text(item.name + '('+ item.charges +'/' + item.maxCharges + ')');
+								$(this).parent().find('h6').text(item.name + '('+ item.charges +'/' + item.maxCharges + ')');
+							}
+						}
+
+						// Es de 1 solo uso o se quedó sin cargas?
+						if(!item.charges){
+							// Si, es de 1 solo uso, o se quedó sin cargas
+							// Consumir item
+							console.log('Player: consumes ' + item.name);
+							if(item.bonus){
+								item.bonus.forEach((bonus) => {
+									player[bonus.stat] -= bonus.amount;
+
+									switch(bonus.stat){
+										case 'strength':
+											player.baseHP += bonus.amount * 10;
+											player.maxHP = player.baseHP;
+										break;
+										case 'agility':
+											player.evasion = ((player.agility) / (player.agility + 100 )) * 100;
+											return;
+										break;
+										case 'intelligence':
+
+										break;
+									}
+								})
+							}
+							let indexItem = player.inventory.indexOf(item);
+							player.inventory.splice(indexItem, 1);
+							$(this).parent().remove();
+						}
+
+						// Activar item
+						item.active(player);
+						return;
+					}else{
+						// No, no es consumible
+
+						// Se activa con cargas?
+						if(item.chargeActivable){
+							// Si, se activa con cargas
+							// Tiene cargas
+							if(item.charges){
+								// Si, le quedan cargas
+								// ACtivar item
+								item.active(player);
+								console.log('Player: uses ' + item.name + ' ' + item.charges + ' charges left.');
+								$(this).text(item.name + '('+ item.charges +'/' + item.maxCharges + ')');
+								$(this).parent().find('h6').text(item.name + '('+ item.charges +'/' + item.maxCharges + ')');
+								return;
+							}
+
+							// No, no tiene cargas, no puede hacer nada, retornar
+							console.log('Player: ' + item.name + ' has 0 charges left.');
+							return;
+						}
+
+						// No, no se activa con cargas
+						// Activar item
+
+						item.active(player);
+						console.log('Player: uses ' + item.name);
+						return;
+					}
+				});
+
+				$(document).on('click', '[data-item-recharge]', function(){
+					let idItem = $(this).data('item-id');
+					let item = items[idItem];
+
+					if(item.rechargePrice){
+						let purchasable = item.rechargePrice.every((cost) => {
+							if(player.stock[cost.resource] < cost.amount){
+								console.log('Necesitas +' + (cost.amount - player.stock[cost.resource]) + ' [' + cost.resource + '] + para recargar el item.');
+								return false;
+							}
+							return true;
+						});
+
+						if(purchasable){
+							item.recharge(item);
+							console.log(item.name + ' now has ' + item.charges + ' charges.');
+						}
+					}
+				});
+
+				// Vender items
+
+				$.contextMenu({
+					selector: '[data-inventory] [data-item]',
+					items: {
+						Sell: {
+							name: 'Sell Item',
+							callback: function(key, opt){
+								let idItem = $(this).data('item-id');
+								let item = player.inventory.find((item) => {
+									return item.id == idItem;
+								});
+
+								let indexItem = player.inventory.indexOf(item);
+								player.inventory.splice(indexItem, 1);
+								$(this).parent().remove();
+
+								item.price.forEach((cost) => {
+									player.stock[cost.resource] += Math.ceil(cost.amount / 2);
+								});
+
+								item.bonus.forEach((bonus) => {
+									player[bonus.stat] -= bonus.amount;
+								});
+
+								console.log('Player: Sells item ' + item.name + ' for half its price.');
+
+								delete item;
+							}
+						}
+					}
+				});
+
+				let initialTime = 0;
+				let finalTime = 0;
+				let fpsCounter = 0;
+
+				// Actualizar estadisticas cada frame sin tener que actualizarlas manualmente
+				// De esta manera podemos centrarnos en los calculos solamente y no en reflejar el cambio manualmente
+				// Cada que cambiemos un stat
+				function gameLoop(finalTime){
+					let idFrame = window.requestAnimationFrame(gameLoop);
+					let deltaTime = finalTime - initialTime;
+					++fpsCounter;
+
+					if(deltaTime >= 1000){
+						$('[data-fps]').text(fpsCounter);
+						initialTime = finalTime;
+						$('[data-fps]').text(fpsCounter);
+						fpsCounter = 0;
+					}
+
+					// PLAYER STATS
+					$('[data-player-hp]').text(player.hp + '/' + player.maxHP);
+					$('[data-player-level]').text(player.level);
+					$('[data-player-physical-damage]').text(player.phyisicalDamage);
+					$('[data-player-evasion]').text(Math.round(player.evasion) + '%');
+					$('[data-player-lifesteal]').text(player.lifeSteal + '%');
+					$('[data-player-armor]').text(player.armor);
+					$('[data-player-critical-chance]').text(player.criticalChance + '%');
+					$('[data-player-critical-mult]').text('x' + player.criticalMult);
+					$('[data-player-thirst]').text(player.thirst + '%');
+					$('[data-player-hunger]').text(player.hunger + '%');
+					$('[data-player-strength]').text(player.strength);
+					$('[data-player-agility]').text(player.agility);
+					$('[data-player-intelligence]').text(player.intelligence);
+
+					// PLAYER STOCK
+					$('[data-stock-wood]').text(player.stock.wood);
+					$('[data-stock-water]').text(player.stock.water);
+					$('[data-stock-food]').text(player.stock.food);
+
+					// CREATURE
+					if(creature){
+						$('[data-creature-level]').text(creature.level);
+						$('[data-creature-hp]').text(creature.hp);
+						$('[data-creature-phyisical-damage]').text(creature.phyisicalDamage);
+					}
+
+					// console.log('Timestamp: ' + timestamp);
+					// window.cancelAnimationFrame(idFrame);
+				}
+
+				window.requestAnimationFrame(gameLoop);
+			});
+
+		</script>
+
+		<style type="text/css">
+			button{
+				cursor: pointer;
+				min-width: 150px;
+				height: 32px;
+				background: #ddd;
+				border: none;
+				margin: 2px;
+			}
+
+			.hidden{
+				display: none;
+			}
+
+			*{
+				-webkit-touch-callout: none;
+				-webkit-user-select: none;
+				-khtml-user-select: none;
+				-moz-user-select: none;
+				-ms-user-select: none;
+				user-select: none;
+			}
+
+			td:nth-child(2){
+				color: orange;
+			}
+
+			.flex-row{
+				display: flex;
+				flex-direction: row;
+				flex: 1 0 auto;
+				background: #dddddd;
+				padding: 5px;
+				margin: 2.5px 0;
+			}
+
+			.flex-col{
+				display: flex;
+				flex-direction: column;
+				flex: 1 1 auto;
+				background: #eeeeee;
+				padding: 5px;
+				margin: 0 5px;
+			}
+
+			.flex-wrap{
+				flex-wrap: wrap;
+			}
+
+			.item{
+				width: 50px;
+				height: 50px;
+				background: black;
+			}
+
+			.tooltip-parent{
+				position: relative;
+			}
+
+			.tooltip-bottom{
+				position: absolute;
+				top: 100%;
+				z-index: 1;
+				visibility: hidden;
+				background: black;
+				color: white;
+				padding: 5px 15px;
+				font-family: sans-serif;
+				max-width: 250px;
+				min-width: 210px;
+				border: 1px solid gold;
+				outline: 3px solid black;
+			}
+
+			.tooltip-bottom h6{
+				color: white;
+			}
+
+			.tooltip-bottom span{
+				color: gold;
+			}
+
+			.tooltip-bottom li{
+				color: red;
+			}
+
+			.tooltip-bottom p{
+				color: cyan;
+			}
+
+			.tooltip-parent:hover .tooltip-bottom{
+				visibility: visible;
+			}
+
+			.tooltip-parent:hover .tooltip-bottom:hover{
+				visibility: hidden;
+			}
+		</style>
+	</head>
+
+	<body>
+		<p>
+			Open the console, to play this game (F12 on Chrome), gather wood, water, food, drink and eat to avoid dead from inanition
+			This game is unfinished and was a concept to create a textual rpg style, using concepts from Dota 2 like hp, mana, items, i was
+			planning it on making it online multiplayer but that never happended haha,
+			When you are attacked, you can't gather resources, the attack panel appears below, if your screen is not big enough and
+			if you cannot do anything, scroll down, there should be a challanger!!.
+
+			Sorry for the spanglish mix in the console
+		</p>
+		<div class="flex-row">
+			<div class="flex-col">
+				<p>FPS: <span data-fps>0</span></p>
+			</div>
+		</div>
+		<div class="flex-row">
+			<div class="flex-col">
+				<fieldset data-player>
+					<legend>Your Stats</legend>
+					<table>
+						<thead>
+							<tr>
+								<th>Stat</th>
+								<th>Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Level</td>
+								<td data-player-level>0</td>
+							</tr>
+							<tr>
+								<td>HP</td>
+								<td data-player-hp>0</td>
+							</tr>
+							<tr>
+								<td>Phyisical Damage</td>
+								<td data-player-physical-damage>0</td>
+							</tr>
+							<tr>
+								<td>Evasion</td>
+								<td data-player-evasion>0<span>%</span></td>
+							</tr>
+							<tr>
+								<td>Lifesteal</td>
+								<td data-player-lifesteal>0<span>%</span></td>
+							</tr>
+							<tr>
+								<td>Armor</td>
+								<td data-player-armor>0</td>
+							</tr>
+							<tr>
+								<td>Critical Chance</td>
+								<td data-player-critical-chance>0</td>
+							</tr>
+							<tr>
+								<td>Critical Mutliplier</td>
+								<td data-player-critical-mult>0</td>
+							</tr>
+							<tr>
+								<td>Thirst</td>
+								<td data-player-thirst>0<span>%</span></td>
+								<td>You die from thirst if goes 100%</td>
+							</tr>
+							<tr>
+								<td>Hunger</td>
+								<td data-player-hunger>0<span>%</span></td>
+								<td>You die from hunger if goes 100%</td>
+							</tr>
+							<tr>
+								<td>Fuerza</td>
+								<td data-player-strength>0</td>
+							</tr>
+							<tr>
+								<td>Agilidad</td>
+								<td data-player-agility>0</td>
+							</tr>
+							<tr>
+								<td>Inteligencia</td>
+								<td data-player-intelligence>0</td>
+							</tr>
+						</tbody>
+					</table>
+					<fieldset>
+						<legend>Actions</legend>
+						<button data-player-drink>Drink (-5 water = -5 thirst)</button>
+						<button data-player-eat>Eat (-5 food = -5 hunger)</button>
+					</fieldset>
+				</fieldset>
+			</div>
+
+			<div class="flex-col">
+				<div class="flex-row">
+					<div class="flex-col">
+						<fieldset>
+							<legend>Stock</legend>
+							<table>
+								<thead>
+									<tr>
+										<th>Resource</th>
+										<th>Quantity</th>
+									</tr
+								</thead>
+								<tbody>
+									<tr>
+										<td>Wood</td>
+										<td data-stock-wood>0</td>
+									</tr>
+								<tbody>
+									<tr>
+										<td>Water</td>
+										<td data-stock-water>0</td>
+									</tr>
+								<tbody>
+									<tr>
+										<td>Food</td>
+										<td data-stock-food>0</td>
+									</tr>
+								</tbody>
+							</table>
+						</fieldset>
+					</div>
+				</div>
+				
+				<div class="flex-row">
+					<div class="flex-col">
+						<fieldset data-gatter>
+							<legend>Gatter</legend>
+							<button data-gatter-wood>Wood</button>
+							<button data-gatter-water>Water</button>
+							<button data-gatter-food>Food</button>
+						</fieldset>
+					</div>
+				</div>
+
+				<div class="flex-row">
+					<div class="flex-col">
+						<fieldset data-inventory>
+							<legend>Inventory</legend>
+						</fieldset>
+					</div>
+				</div>
+			</div>
+
+			<div class="flex-col">
+				<fieldset data-store>
+					<legend>Item Store</legend>
+					<div data-items class="flex-row flex-wrap"></div>
+				</fieldset>
+			</div>
+		</div>
+
+		<fieldset data-creature class="hidden">
+			<legend>Creature</legend>
+			<fieldset>
+				<legend>Actions</legend>
+				<button data-player-attack>Attack</button>
+			</fieldset>
+			<table>
+				<thead>
+					<tr>
+						<th>Stat</th>
+						<th>Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<td>Level</td>
+						<td data-creature-level>0</td>
+					</tr>
+					<tr>
+						<td>HP</td>
+						<td data-creature-hp>0</td>
+					</tr>
+					<tr>
+						<td>Phyisical Damage</td>
+						<td data-creature-phyisical-damage>0</td>
+					</tr>
+				</tbody>
+			</table>
+		</fieldset>
+	</body>
+</html>

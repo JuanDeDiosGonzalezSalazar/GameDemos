@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport"
+		content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+
+	<style type="text/css">
+		body {
+			margin: 0;
+			padding: 0;
+		}
+	</style>
+	<script src="/public/js/pixi.js/dist/pixi.min.js"></script>
+	<script src="/public/js/tink.js"></script>
+	<script src="/public/js/spriteUtilities.js"></script>
+	<script src="/public/js/bump.js"></script>
+</head>
+
+<body>
+	<script type="text/javascript">
+		/*==================================*/
+		/*									*/
+		/* RENAME PIXI						*/
+		/*									*/
+		/*==================================*/
+		var Sprite = PIXI.Sprite;
+		var Graphics = PIXI.Graphics;
+		var Container = PIXI.Container;
+		var Text = PIXI.Text;
+		var ParticleContainer = PIXI.ParticleContainer;
+		var RenderTexture = PIXI.RenderTexture;
+		var Rectangle = PIXI.Rectangle;
+		var Texture = PIXI.Texture;
+		var TilingSprite = PIXI.extras.TilingSprite;
+
+		Container.prototype.hide = function () {
+			this.children.forEach(function (child) {
+				child.lastEnabledState = child.enabled;
+				child.enabled = false;
+			});
+
+			this.visible = false;
+		};
+
+		Container.prototype.show = function () {
+			this.children.forEach(function (child) {
+				child.enabled = child.lastEnabledState;
+			});
+
+			this.visible = true;
+		};
+
+		/*==================================*/
+		/*									*/
+		/* RENDERER							*/
+		/*									*/
+		/*==================================*/
+		var renderer = PIXI.autoDetectRenderer(414, 736);
+		renderer.backgroundColor = '0xCCCCCC';
+
+		/*==================================*/
+		/*									*/
+		/* VIEWPORT							*/
+		/*									*/
+		/*==================================*/
+		var viewport = new Container();
+		var displayViewport = new Container();
+
+		/*==================================*/
+		/*									*/
+		/* TINK								*/
+		/*									*/
+		/*==================================*/
+		let tink = new Tink(PIXI, renderer.view);
+		let pointer = tink.makePointer();
+
+		let su = new SpriteUtilities(PIXI);
+		let bump = new Bump(PIXI);
+
+		var atlasPath = '/public/assets/atlas/spaceship.json';
+
+		/* LOAD SPRITES */
+		PIXI.loader
+			.add(atlasPath)
+			.add("walking.png", "/public/assets/primitiveImages/spaceship.png")
+			.on('progress', function (loader, resource) {
+				console.log("Loaded: " + resource.url);
+				console.log(resource);
+
+				//Display the precentage of files currently loaded
+				console.log("progress: " + loader.progress + "%");
+			})
+			.load(function () {
+				var textures = PIXI.loader.resources[atlasPath].textures;
+				document.body.appendChild(renderer.view);
+
+				function Game() {
+					this.state = "menu";
+				}
+
+				var game = new Game();
+
+				/*==================================*/
+				/*									*/
+				/* START SCREEN						*/
+				/*									*/
+				/*==================================*/
+				var startScreen = new Container();
+				startScreen.zIndex = 1;
+				var sky = new TilingSprite(textures["sky.png"], 414, 736);
+				var cloudsBackground = new TilingSprite(textures["clouds_background.png"], 414, 736);
+				var cloudsForeground = new TilingSprite(textures["clouds_foreground.png"], 414, 736);
+				cloudsBackground.speed = 2;
+				cloudsForeground.speed = 4;
+
+				startScreen.addChild(sky);
+				startScreen.addChild(cloudsBackground);
+				startScreen.addChild(cloudsForeground);
+
+				var startButton = new Text("GO!", {
+					font: "70px Arial",
+					fill: "#44ccff",
+					fontWeight: "900",
+					dropShadow: true
+				});
+
+				startButton.x = (renderer.width - startButton.width) / 2
+				startButton.y = (renderer.height - startButton.height) / 2;
+				tink.makeInteractive(startButton);
+
+				startButton.press = function () {
+					startButton.visible = false;
+					startButton.enabled = false;
+					game.state = "starting";
+					scene0.visible = true;
+				};
+
+				startButton.release = function () { };
+				startScreen.addChild(startButton);
+
+				viewport.addChild(startScreen);
+
+				/*==================================*/
+				/*									*/
+				/* SCENE 0 SCREEN					*/
+				/*									*/
+				/*==================================*/
+
+				var scene0 = new Container();
+				scene0.zIndex = 0;
+
+				let voidBackground = new TilingSprite(textures["background_0.png"], 414, 736);
+				let starsBackground = new TilingSprite(textures["background_1.png"], 414, 736);
+				let starsForeground = new TilingSprite(textures["background_2.png"], 414, 736);
+
+				scene0.addChild(voidBackground);
+				scene0.addChild(starsBackground);
+				scene0.addChild(starsForeground);
+
+				viewport.addChild(scene0);
+				scene0.visible = false;
+
+				/*==================================*/
+				/*									*/
+				/* GAME OVER SCREEN					*/
+				/*									*/
+				/*==================================*/
+
+				var gameOverScreen = new Container();
+				gameOverScreen.zIndex = 6;
+				var ctx = new Graphics();
+				ctx.zIndex = 5;
+				ctx.beginFill(0xffffff);
+				ctx.drawRect(0, 0, renderer.width, renderer.height)
+				ctx.alpha = 0.5;
+				gameOverScreen.addChild(ctx);
+
+				var restartButton = new Text("`Reintentar!", {
+					font: "50px Arial",
+					fill: "#44ccff",
+					fontWeight: "900",
+					dropShadow: true
+				});
+
+				restartButton.x = (renderer.width - restartButton.width) / 2
+				restartButton.y = (renderer.height - restartButton.height) / 2;
+				tink.makeInteractive(restartButton);
+				restartButton.enabled = false;
+
+				restartButton.press = function () {
+					game.state = "restarting";
+				};
+
+				restartButton.release = function () { };
+				gameOverScreen.addChild(restartButton);
+				viewport.addChild(gameOverScreen);
+				gameOverScreen.visible = false;
+
+				/*==================================*/
+				/* DEFINE SECTIONS  				*/
+				/*==================================*/
+				var MAPSECTIONS = 1;
+				var VISIBLE_SECTIONS = 1;
+				var SECTIONWIDTH = 3;
+				var SECTIONHEIGHT = 3;
+				var UNIT = 32;
+				var SUBDIVISIONS = 3;
+				var SPACEWIDTH = SECTIONWIDTH * MAPSECTIONS;
+				var SPACEHEIGHT = SECTIONHEIGHT * MAPSECTIONS;
+				var SUBDIVISIONSTHICKNESS = 3;
+				var AXISTHICKNESS = 5;
+				var CURRENTFRAME = 0;
+
+				/*==================================*/
+				/*									*/
+				/* PLAYER							*/
+				/*									*/
+				/*==================================*/
+
+				function Player(vx, vy, texture) {
+					// Cap player position to the maximum if the position its ouside of the space boundaires
+					this.position = {
+						x: 0,
+						y: 0,
+						z: 0
+					};
+
+					this.velocidad = {
+						distancia: 6,
+						tiempo: 1,
+						x: 0,
+						y: 0,
+						z: 0
+					}
+
+					console.log('Resources: ', texture)
+
+					this.frames = su.filmstrip(PIXI.loader.resources[texture].texture, 32 * 3, 32 * 6);
+					this.sprite = su.sprite(this.frames);
+					this.sprite.circular = true;
+					this.sprite.state = {
+						left: [0, 3],
+						idle: [0, 3],
+						right: [0, 3]
+					};
+					this.sprite.fps = 20;
+					this.sprite.playAnimation(this.sprite.state.idle);
+
+					// Sprite stays in the middle of the viewport
+					this.sprite.x = 0;
+					this.sprite.y = 0;
+					this.score = 0;
+				}
+
+				var player = new Player(0, 0, "walking.png");
+
+				var playerOrigin = new Container();
+				playerOrigin.zIndex = 2;
+				playerOrigin.x = (renderer.width - player.sprite.width) / 2;
+				playerOrigin.y = renderer.height - player.sprite.height;
+
+				viewport.addChild(playerOrigin);
+				playerOrigin.addChild(player.sprite);
+
+				var playerBounds = new Graphics();
+				playerBounds.lineStyle(0, 0x00ff00);
+				playerBounds.drawRect(0, 0, 0, 0);
+				playerBounds.x = (player.sprite.width - playerBounds.width) / 2;
+				playerBounds.y = 16;
+				player.sprite.addChild(playerBounds);
+
+				/*==================================*/
+				/*									*/
+				/* MOVE PLAYER 						*/
+				/*									*/
+				/*==================================*/
+
+				{
+					var keyW = keyboard('W'.charCodeAt(0));
+					var keyA = keyboard('A'.charCodeAt(0));
+					var keyS = keyboard('S'.charCodeAt(0));
+					var keyD = keyboard('D'.charCodeAt(0));
+
+					keyA.press = function () {
+						player.velocidad.x -= 1;
+						if (player.sprite.currentState == "left") {
+							return;
+						}
+						player.sprite.playAnimation(player.sprite.state.left);
+						player.sprite.currentState = "left";
+					};
+
+					keyD.press = function () {
+						player.velocidad.x += 1;
+						if (player.sprite.currentState == "right") {
+							return;
+						}
+						player.sprite.playAnimation(player.sprite.state.right);
+						player.sprite.currentState = "right";
+					};
+
+					keyA.release = function () {
+						player.velocidad.x += 1;
+						if (player.velocidad.x != 0) {
+							if (player.velocidad.x > 0) {
+								player.sprite.playAnimation(player.sprite.state.right);
+							} else if (player.velocidad.x < 0) {
+								player.sprite.playAnimation(player.sprite.state.left);
+							}
+							return;
+						}
+						player.sprite.playAnimation(player.sprite.state.idle);
+					};
+
+					keyD.release = function () {
+						player.velocidad.x -= 1;
+						if (player.velocidad.x != 0 || player.velocidad.y != 0) {
+							if (player.velocidad.x > 0) {
+								player.sprite.playAnimation(player.sprite.state.right);
+							} else if (player.velocidad.x < 0) {
+								player.sprite.playAnimation(player.sprite.state.left);
+							}
+							return;
+						}
+						player.sprite.playAnimation(player.sprite.state.idle);
+					};
+
+					function keyboard(keyCode) {
+						var key = {};
+						key.code = keyCode;
+						key.isDown = false;
+						key.isUp = true;
+						key.press = undefined;
+						key.release = undefined;
+						//The `downHandler`
+						key.downHandler = function (event) {
+							if (event.keyCode === key.code) {
+								if (key.isUp && key.press) key.press();
+								key.isDown = true;
+								key.isUp = false;
+							}
+							event.preventDefault();
+						};
+
+						//The `upHandler`
+						key.upHandler = function (event) {
+							if (event.keyCode === key.code) {
+								if (key.isDown && key.release) key.release();
+								key.isDown = false;
+								key.isUp = true;
+							}
+							event.preventDefault();
+						};
+
+						//Attach event listeners
+						window.addEventListener(
+							"keydown", key.downHandler.bind(key), false
+						);
+						window.addEventListener(
+							"keyup", key.upHandler.bind(key), false
+						);
+						return key;
+					}
+				}
+
+				function rangeConversor(oldValue, oldMin, oldMax, newMin, newMax) {
+					return (((oldValue - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin
+				}
+
+				/*==================================*/
+				/*																	*/
+				/* UPDATE FUNCTION									*/
+				/*																	*/
+				/*==================================*/
+
+				function update() {
+					switch (game.state) {
+						case "menu":
+							if (CURRENTFRAME < 30) {
+								startButton.alpha = rangeConversor(CURRENTFRAME, 1, 30, 1, 0);
+							} else if (CURRENTFRAME < 60) {
+								startButton.alpha = rangeConversor(CURRENTFRAME, 31, 60, 0, 1);
+							}
+							cloudsBackground.tilePosition.y += cloudsBackground.speed;
+							cloudsForeground.tilePosition.y += cloudsForeground.speed;
+							if (cloudsBackground.tilePosition.y >= cloudsBackground.height) {
+								cloudsBackground.tilePosition.y -= cloudsBackground.height;
+							}
+							if (cloudsForeground.tilePosition.y >= cloudsForeground.height) {
+								cloudsBackground.tilePosition.y -= cloudsBackground.height;
+							}
+							break;
+						case "starting":
+							cloudsBackground.tilePosition.y += cloudsBackground.speed;
+							cloudsForeground.tilePosition.y += cloudsForeground.speed;
+
+							cloudsBackground.alpha = rangeConversor(cloudsBackground.speed, 2, 25, 1, 0);
+							cloudsForeground.alpha = rangeConversor(cloudsBackground.speed, 2, 25, 1, 0);
+							sky.alpha = rangeConversor(cloudsBackground.speed, 2, 40, 1, 0);
+
+							if (cloudsBackground.tilePosition.y >= cloudsBackground.height) {
+								cloudsBackground.tilePosition.y -= cloudsBackground.height;
+							}
+							if (cloudsForeground.tilePosition.y >= cloudsForeground.height) {
+								cloudsBackground.tilePosition.y -= cloudsBackground.height;
+							}
+
+							voidBackground.tint = 0x000000;
+							starsBackground.tilePosition.y += meteorSpeed * 1.2;
+							starsForeground.tilePosition.y += meteorSpeed * 1.4;
+
+							if (starsBackground.tilePosition.y >= starsBackground.height) {
+								starsBackground.tilePosition.y = 0;
+							}
+							if (starsForeground.tilePosition.y >= starsForeground.height) {
+								starsForeground.tilePosition.y = 0;
+							}
+
+							if (cloudsBackground.speed < 40) {
+								cloudsBackground.speed *= 1.01;
+								cloudsForeground.speed *= 1.01;
+							} else {
+								startScreen.visible = false;
+								spacialInfo.x = 20;
+								spacialInfo.y = 20;
+								spacialInfo.visible = true;
+								game.state = "playing";
+							}
+							break;
+						case "playing":
+							var playerHasMoved = updatePlayer();
+							upgradeBackground();
+							createMeteor();
+							updateMeteors();
+							updateSpacialInfo();
+							break;
+						case "losing":
+							deleteMeteors();
+							gameOverScreen.visible = true;
+							restartButton.enabled = true;
+							restartButton.visible = true;
+							spacialInfo.x = (renderer.width - spacialInfo.width) / 2;
+							spacialInfo.y = restartButton.y + restartButton.height + 20;
+							game.state = "game over";
+							break;
+						case "game over":
+							break;
+						case "restarting":
+							meteorSpeed = 2;
+							tint = {
+								r: 0,
+								g: 0,
+								b: 0
+							};
+							restartButton.enabled = false;
+							restartButton.visible = false;
+							scene0.visible = true;
+							gameOverScreen.visible = false;
+							startScreen.visible = true;
+							sky.alpha = 1;
+							cloudsBackground.alpha = 1;
+							cloudsForeground.alpha = 1;
+							cloudsBackground.speed = 2;
+							cloudsForeground.speed = 4;
+							spacialInfo.visible = false;
+							player.score = 0;
+							player.position.x = 0;
+							player.position.y = 0;
+							player.sprite.x = 0;
+							player.sprite.y = 0;
+							game.state = "starting";
+							break;
+						default:
+							break;
+					}
+				}
+
+				/*==================================*/
+				/* UPDATE BACKGROUND				*/
+				/*==================================*/
+
+				var tint = {
+					r: 0,
+					g: 0,
+					b: 0
+				};
+
+				function upgradeBackground() {
+					starsBackground.tilePosition.y += meteorSpeed * 1.2;
+					starsForeground.tilePosition.y += meteorSpeed * 1.4;
+
+					if (starsBackground.tilePosition.y >= starsBackground.height) {
+						starsBackground.tilePosition.y = 0;
+					}
+					if (starsForeground.tilePosition.y >= starsForeground.height) {
+						starsForeground.tilePosition.y = 0;
+					}
+
+					if (tint.b < 255) {
+						tint.b += 0.1;
+					} else if (tint.g < 255) {
+						tint.g += 0.1;
+					} else if (tint.r < 255) {
+						tint.r += 0.1;
+					}
+
+					var color = {};
+					color.r = Math.round(tint.r).toString(16);
+					color.r = color.r.length == 1 ? "0" + color.r : color.r;
+					color.g = Math.round(tint.g).toString(16);
+					color.g = color.g.length == 1 ? "0" + color.g : color.g;
+					color.b = Math.round(tint.b).toString(16);
+					color.b = color.b.length == 1 ? "0" + color.b : color.b;
+
+					voidBackground.tint = "0x" + color.r + color.g + color.b;
+				}
+
+				/*==================================*/
+				/* UPDATE PLAYER					*/
+				/*==================================*/
+
+				function updatePlayer() {
+					if (CURRENTFRAME % player.velocidad.tiempo != 0) {
+						return;
+					}
+
+					var playerHasMoved = false;
+
+					if (player.velocidad.x) {
+						var nextX = player.position.x + player.velocidad.x * player.velocidad.distancia;
+
+						if (nextX >= -(renderer.width - player.sprite.width) / 2 && nextX <= (renderer.width - player.sprite.width) / 2) {
+							player.position.x = nextX;
+							player.sprite.x = nextX;
+							playerHasMoved = true;
+						}
+					}
+
+					return playerHasMoved;
+				}
+
+				/*==================================*/
+				/* UPDATE SPACIAL INFO 							*/
+				/*==================================*/
+
+				{
+					var spacialInfo = new Text("Score: " + Math.round(player.score),
+						{
+							font: "24px Arial",
+							fill: "#ffffff",
+							fontWeight: "900",
+							dropShadow: true
+						});
+					spacialInfo.x = 20;
+					spacialInfo.y = 20;
+					spacialInfo.zIndex = 3;
+					viewport.addChild(spacialInfo);
+					spacialInfo.visible = false;
+
+					function updateSpacialInfo() {
+						if (game.state == "playing") {
+							player.score += 0.1;
+							spacialInfo.text = "Score: " + Math.round(player.score);
+						} else {
+							spacialInfo.text = "Score: " + Math.round(player.score);
+						}
+						viewport.addChild(spacialInfo);
+					}
+				}
+
+				// Returns a random integer between min (included) and max (included)
+
+				function getRandomInt(min, max) {
+					return Math.floor(Math.random() * (max - min + 1)) + min;
+				}
+				/*==================================*/
+				/* SPAWN METEORS 					*/
+				/*==================================*/
+
+				var meteors = [];
+				var meteorSpeed = 2;
+				var meteorSpawnInterval = 13;
+
+				function createMeteor() {
+					if (CURRENTFRAME % meteorSpawnInterval != 0) {
+						return;
+					}
+
+					meteorSpeed += 0.016;
+					var randomInt = getRandomInt(0, 3);
+					if (randomInt) {
+
+						var meteor = new Sprite(textures["meteoro.png"]);
+						meteor.zIndex = 0;
+						meteor.circular = true;
+						meteor.x = getRandomInt(renderer.width * 0, renderer.width * 1);
+						meteor.y = -meteor.height;
+						meteor.direction = rotateToPoint(
+							getRandomInt(0, renderer.width - meteor.width),
+							playerOrigin.y,
+							meteor.x,
+							meteor.y
+						);
+
+						var meteorBounds = new Graphics();
+						meteorBounds.lineStyle(1, 0xff0000, 0);
+						meteorBounds.drawRect(0, 0, 32, 32);
+						meteorBounds.x = (meteor.width - meteorBounds.width) / 2;
+						meteorBounds.y = (meteor.height - meteorBounds.height) / 2;
+						meteor.bounds = meteorBounds;
+
+
+						meteor.addChild(meteorBounds);
+						viewport.addChild(meteor);
+						meteors.push(meteor);
+					} else {
+						var asteroide = new Sprite(textures["asteroide.png"]);
+						asteroide.zIndex = 0;
+						asteroide.circular = true;
+						asteroide.x = getRandomInt(renderer.width * 0, renderer.width * 1);
+						asteroide.y = -asteroide.height;
+						asteroide.direction = rotateToPoint(
+							getRandomInt(0, renderer.width - asteroide.width),
+							playerOrigin.y,
+							asteroide.x,
+							asteroide.y
+						);
+						// asteroide.rotation = getRandomInt(-1, 1);
+
+						asteroide.tipo = "asteroide";
+
+						var asteroideBounds = new Graphics();
+						asteroideBounds.lineStyle(1, 0xff0000, 0);
+						asteroideBounds.drawRect(0, 0, 48, 32);
+						asteroideBounds.x = (asteroide.width - asteroideBounds.width) / 2;
+						asteroideBounds.y = (asteroide.height - asteroideBounds.height) / 2;
+						asteroide.bounds = asteroideBounds;
+
+						asteroide.addChild(asteroideBounds);
+						viewport.addChild(asteroide);
+						meteors.push(asteroide);
+					}
+				}
+
+				function rotateToPoint(aimX, aimY, px, py) {
+					var self = this;
+					var dist_Y = aimY - py;
+					var dist_X = aimX - px;
+					var angle = Math.atan2(dist_Y, dist_X);
+					//var degrees = angle * 180/ Math.PI;
+					return angle;
+				}
+
+				function updateMeteors() {
+					for (var b = meteors.length - 1; b >= 0; b--) {
+						meteors[b].position.x += Math.cos(meteors[b].direction) * meteorSpeed * 4.1;
+						meteors[b].position.y += Math.sin(meteors[b].direction) * meteorSpeed * 5.75;
+
+						// if(meteors[b].tipo == "asteroide"){
+						// 	meteors[b].rotation += Math.sign(meteors[b].rotation) * 0.01;
+						// }
+
+						if (bump.hit(playerBounds, meteors[b].bounds, false, false, true)) {
+							game.state = "losing";
+							// viewport.removeChild(meteors[b]);
+							// meteors[b].visible = false
+							viewport.removeChild(meteors[b]);
+							viewport.removeChild(meteors[b].bounds);
+							meteors.splice(b, 1);
+							// playerBounds.visible = false;
+						}
+						else if (meteors[b].position.x > renderer.width || meteors[b].position.y > renderer.height * 1.25) {
+							viewport.removeChild(meteors[b]);
+							viewport.removeChild(meteors[b].bounds);
+							meteors.splice(b, 1);
+						}
+					}
+				}
+
+				function deleteMeteors() {
+					for (var b = meteors.length - 1; b >= 0; b--) {
+						viewport.removeChild(meteors[b]);
+						viewport.removeChild(meteors[b].bounds);
+						meteors.splice(b, 1);
+					}
+				}
+
+				/* call this function whenever you added a new layer/container */
+				viewport.updateLayersOrder = function () {
+					viewport.children.sort(function (a, b) {
+						a.zIndex = a.zIndex || 0;
+						b.zIndex = b.zIndex || 0;
+						return a.zIndex - b.zIndex
+					});
+				};
+
+				viewport.updateLayersOrder();
+
+				/*==================================*/
+				/*																	*/
+				/* GAME LOOP 												*/
+				/*																	*/
+				/*==================================*/
+				function loop() {
+					requestAnimationFrame(loop);
+					tink.update();
+
+					if (CURRENTFRAME > 60) {
+						CURRENTFRAME = 1;
+					}
+
+					update();
+					renderer.render(viewport);
+
+					CURRENTFRAME += 1;
+				}
+
+				loop();
+			});
+
+			alert('HOW TO PLAY: Click on the GO! Text, Wait for the animation to end, and then you can move with A (Left) D(Right)')
+	</script>
+</body>
+
+</html>

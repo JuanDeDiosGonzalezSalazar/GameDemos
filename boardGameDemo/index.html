@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+	<script src="/public/js/pixi.js/dist/pixi.min.js"></script>
+	<script src="/public/js/tink.js"></script>
+</head>
+
+<body>
+	<script type="text/javascript">
+		var whosPlaying = null;
+
+		var gameState = 'menu';
+		function Player() {
+			this.name = null;
+			this.hp = 0;
+			this.mp = 0;
+			this.ar = 0;
+			this.mr = 0;
+			this.auras = [];
+			this.spells = {
+				passive: [],
+				active: []
+			};
+			this.summons = [];
+			this.summonsCasted = [];
+		}
+		Player.prototype = {};
+
+		function Summon() {
+			this.name = null;
+			this.texturePath = null;
+			this.sprite = null;
+			this.hp = 0;
+			this.mp = 0;
+			this.ad = 0;
+			this.adInterval = 0;
+			this.adHandler = null;
+			this.mdInterval = 0;
+			this.md = 0;
+			this.auras = [];
+		}
+
+		var summonSelected = null;
+
+		//Create the renderer
+		var renderer = PIXI.autoDetectRenderer(960, 539);
+		renderer.backgroundColor = '0xffffff';
+
+		/*==================================*/
+		/*									*/
+		/* TINK								*/
+		/*									*/
+		/*==================================*/
+		let tink = new Tink(PIXI, renderer.view);
+		let pointer = tink.makePointer();
+
+		//Create a container object called the `stage`
+		PIXI.Container.prototype.hide = function () {
+			this.children.forEach(function (child) {
+				child.lastEnabledState = child.enabled;
+				child.enabled = false;
+			});
+
+			this.visible = false;
+		};
+
+		PIXI.Container.prototype.show = function () {
+			this.children.forEach(function (child) {
+				child.enabled = child.lastEnabledState;
+			});
+
+			this.visible = true;
+		};
+
+		var stage = new PIXI.Container();
+
+		var atlasPath = '/public/assets/atlas/buildings.json';
+
+		/* LOAD SPRITES */
+		PIXI.loader
+			.add(atlasPath)
+			.on('progress', function (loader, resource) {
+				console.log("Loaded: " + resource.url);
+
+				//Display the precentage of files currently loaded
+				console.log("progress: " + loader.progress + "%");
+			})
+			.load(function () {
+				var textures = PIXI.loader.resources[atlasPath].textures;
+				var Sprite = PIXI.Sprite;
+				/*==================================*/
+				/*									*/
+				/* SUMMONER 1 INIT					*/
+				/*									*/
+				/*==================================*/
+
+				summoner1 = new Player();
+				summoner1.name = 'Jean';
+				summoner1.hp = 150;
+				summoner1.mp = 100;
+				summoner1.ar = 2;
+				summoner1.mr = 3;
+				summoner1.auras.push(
+					{
+						name: 'Health Degen Aura',
+						description: 'Weak enemies 1 HP per second',
+						effect: function () {
+							summoner2.hp -= 1;
+						},
+						interval: 1000
+					}
+				);
+				summoner1.spells.active.push(
+					{
+						name: 'Fire Ball',
+						description: 'Shoots a fireball to the creatures or the summoner.',
+						effect: function () {
+							summoner2.hp -= 20;
+						}
+					}
+				);
+
+				var textureString = 'turret.png';
+				summoner1.summons = [new Summon(), new Summon(), new Summon(), new Summon()];
+				summoner1.summons[0].name = 'Turret';
+				summoner1.summons[0].texturePath = textureString;
+				summoner1.summons[0].sprite = new Sprite(textures[textureString]);
+				summoner1.summons[0].ad = 1;
+				summoner1.summons[0].adInterval = 1000;
+
+				textureString = 'cannon_1.png';
+				summoner1.summons[1].name = 'Cannon L1';
+				summoner1.summons[1].texturePath = textureString;
+				summoner1.summons[1].sprite = new Sprite(textures[textureString]);
+				summoner1.summons[1].ad = 2;
+				summoner1.summons[1].adInterval = 1000;
+
+				textureString = 'cannon_2.png';
+				summoner1.summons[2].name = 'Cannon L2';
+				summoner1.summons[2].texturePath = textureString;
+				summoner1.summons[2].sprite = new Sprite(textures[textureString]);
+				summoner1.summons[2].ad = 3;
+				summoner1.summons[2].adInterval = 1000;
+
+				textureString = 'cannon_3.png';
+				summoner1.summons[3].name = 'Cannon L3';
+				summoner1.summons[3].texturePath = textureString;
+				summoner1.summons[3].sprite = new Sprite(textures[textureString]);
+				summoner1.summons[3].ad = 4;
+				summoner1.summons[3].adInterval = 1000;
+
+				console.log(summoner1);
+
+				/*==================================*/
+				/*									*/
+				/* SUMMONER 2 INIT					*/
+				/*									*/
+				/*==================================*/
+
+				summoner2 = new Player();
+				summoner2.name = 'Giov';
+				summoner2.hp = 150;
+				summoner2.mp = 100;
+				summoner2.ar = 4;
+				summoner2.mr = 1;
+				summoner2.spells.passive = [
+					{
+						name: 'Health Regen',
+						effect: function () {
+							summoner2.hp += 5;
+						},
+						interval: 5000
+					}
+				];
+
+				textureString = 'turret.png';
+				summoner2.summons = [new Summon(), new Summon()];
+				summoner2.summons[0].name = 'Turret';
+				summoner2.summons[0].texturePath = textureString;
+				summoner2.summons[0].sprite = new Sprite(textures[textureString]);
+				summoner2.summons[0].ad = 2;
+				summoner2.summons[0].adInterval = 1000;
+
+				textureString = 'cannon_1.png';
+				summoner2.summons[1].name = 'Cannon L1';
+				summoner2.summons[1].texturePath = textureString;
+				summoner2.summons[1].sprite = new Sprite(textures[textureString]);
+				summoner2.summons[1].ad = 4;
+				summoner2.summons[1].adInterval = 1000;
+
+
+				//Add the canvas to the HTML document
+				document.body.appendChild(renderer.view);
+
+				/*==================================*/
+				/*									*/
+				/* MENU								*/
+				/*									*/
+				/*==================================*/
+				var menu = new PIXI.Container();
+
+				let buscar_partida_button_sprites = [
+					textures['buscar_partida_button_up.png'],
+					textures['buscar_partida_button_over.png'],
+					textures['buscar_partida_button_down.png']
+				];
+
+				let buscar_partida_button = tink.button(buscar_partida_button_sprites);
+				buscar_partida_button.action = null;
+				buscar_partida_button.x = (renderer.width - buscar_partida_button.width) / 2;
+				buscar_partida_button.y = buscar_partida_button.height;
+
+				buscar_partida_button.tap = function () {
+					menu.hide();
+
+					playingStage.show();
+					summon_button.enabled = true;
+					start();
+				};
+
+				menu.addChild(buscar_partida_button);
+				stage.addChild(menu);
+
+				/*==================================*/
+				/*									*/
+				/* PLAYING STAGE					*/
+				/*									*/
+				/*==================================*/
+				whosPlaying = summoner1;
+				let playingStage = new PIXI.Container();
+				var summoning_places = [];
+
+				/* Summoner Places */
+				let summoner_place_p1 = new Sprite(textures['summoner_place.png']);
+				let summoner_place_p2 = new Sprite(textures['summoner_place.png']);
+				summoner_place_p1.x = 8;
+				summoner_place_p1.y = 68;
+				summoner_place_p2.x = (renderer.width - summoner_place_p2.width - 8);
+				summoner_place_p2.y = 68;
+
+				playingStage.addChild(summoner_place_p1);
+				playingStage.addChild(summoner_place_p2);
+
+				/* Summoning Places */
+				for (var x = 0; x < 5; x++) {
+					for (var y = 0; y < 3; y++) {
+						let summoning_place = new Sprite(textures['summoning_place_up.png']);
+						summoning_place.x = 143 + (x * summoning_place.width);
+						summoning_place.y = 8 + (y * summoning_place.height);
+						summoning_places.push(summoning_place);
+						tink.makeInteractive(summoning_place);
+						summoning_place.taken = false;
+						summoning_place.enabled = false;
+
+						summoning_place.out = function () {
+							summoning_place.texture = textures['summoning_place_up.png'];
+						};
+						summoning_place.over = function () {
+							summoning_place.texture = textures['summoning_place_over.png'];
+						};
+						summoning_place.press = function () {
+							summoning_place.texture = textures['summoning_place_down.png'];
+						};
+						summoning_place.release = function () {
+							summoning_place.texture = textures['summoning_place_up.png'];
+						};
+						summoning_place.tap = function () {
+							summoning_place.taken = true;
+							summoning_places.forEach(function (summoning_place) {
+								summoning_place.enabled = false;
+							});
+							summoning_place.texture = summonSelected.sprite.texture;
+							cancel_button.enabled = false;
+							cancel_button.visible = false;
+
+							var castSummon = new Summon();
+							castSummon.name = summonSelected.name;
+							castSummon.texturePath = summonSelected.texturePath;
+							castSummon.sprite = summonSelected.sprite;
+							castSummon.hp = summonSelected.hp;
+							castSummon.mp = summonSelected.mp;
+							castSummon.ad = summonSelected.ad;
+							castSummon.adInterval = summonSelected.adInterval;
+							castSummon.adHandler = summonSelected.adHandler;
+							castSummon.mdInterval = summonSelected.mdInterval;
+							castSummon.md = summonSelected.md;
+							castSummon.auras = summonSelected.auras;
+
+							if (whosPlaying == summoner1) {
+								summoner1.summonsCasted.push(castSummon);
+								castSummon.adHandler = setInterval(function () {
+									summoner2.hp -= castSummon.ad;
+								}, castSummon.adInterval);
+							} else {
+								summoner2.summonsCasted.push(castSummon);
+								castSummon.adHandler = setInterval(function () {
+									summoner1.hp -= castSummon.ad;
+								}, castSummon.adInterval);
+							}
+						};
+
+						playingStage.addChild(summoning_place);
+					}
+				}
+
+				let summon_button_sprites = [
+					textures['summon_button_up.png'],
+					textures['summon_button_over.png'],
+					textures['summon_button_down.png']
+				];
+				let summon_button = tink.button(summon_button_sprites);
+				summon_button.enabled = false;
+				summon_button.x = summon_button.width;
+				summon_button.y = renderer.height - (summon_button.height * 1.5);
+
+				summon_button.tap = function () {
+					console.log(whosPlaying.name);
+					console.log(whosPlaying == summoner1);
+					if (whosPlaying == summoner1) {
+						playingStage.hide();
+						summon_cards.visible = true;
+						summon_cards_back_button.enabled = true;
+						summoner1.summons.forEach(function (summon) {
+							summon.sprite.enabled = true;
+						});
+					} else {
+						playingStage.hide();
+						summon_cards2.visible = true;
+						summon_cards_back_button2.enabled = true;
+						summoner2.summons.forEach(function (summon) {
+							summon.sprite.enabled = true;
+						});
+					}
+				};
+
+				playingStage.addChild(summon_button);
+				stage.addChild(playingStage);
+				playingStage.hide();
+
+				/* Cancel button */
+
+				let cancel_button_sprites = [
+					textures['cancel_button_up.png'],
+					textures['cancel_button_over.png'],
+					textures['cancel_button_down.png'],
+				];
+
+				let cancel_button = tink.button(cancel_button_sprites);
+				cancel_button.x = (renderer.width - cancel_button.width - 10);
+				cancel_button.y = (renderer.height - cancel_button.height - 10);
+				cancel_button.enabled = false;
+				cancel_button.visible = false;
+				cancel_button.tap = function () {
+					summoning_places.forEach(function (summoning_place) {
+						summoning_place.enabled = false;
+						cancel_button.enabled = false;
+						cancel_button.visible = false;
+					});
+				};
+				playingStage.addChild(cancel_button);
+
+				var whosPlayingLabel = new PIXI.Text('Playing as: ' + whosPlaying.name);
+				whosPlayingLabel.x = (renderer.width - whosPlayingLabel.width) / 2;
+				whosPlayingLabel.y = renderer.height - whosPlayingLabel.height;
+				stage.addChild(whosPlayingLabel);
+
+				/*==================================*/
+				/*									*/
+				/* SUMMON CARDS						*/
+				/*									*/
+				/*==================================*/
+
+				var summon_cards = new PIXI.Container();
+
+				var row_length = 7;
+				var current_row = 0;
+				var current_column = 0;
+
+				summoner1.summons.forEach(function (summon) {
+					summon.sprite.x = (summon.sprite.width * current_column) + (2 * (current_column + 1));
+					summon.sprite.y = (summon.sprite.height * current_row) + (2 * (current_row + 1));
+					current_column += 1;
+					if (current_column >= row_length) {
+						current_column = 0;
+						current_row += 1;
+					}
+
+					tink.makeInteractive(summon.sprite);
+					summon.sprite.enabled = false;
+
+					summon.sprite.tap = function () {
+						console.log(summon.name);
+						summonSelected = summon;
+						summoner1.summons.forEach(function (summon) {
+							summon.sprite.enabled = false;
+						});
+						summon_cards_back_button.enabled = false;
+						summon_cards.visible = false;
+						playingStage.show();
+						cancel_button.enabled = true;
+						cancel_button.visible = true;
+						summoning_places.forEach(function (summoning_place) {
+							if (!summoning_place.taken) {
+								summoning_place.enabled = true;
+							}
+						});
+					};
+
+					summon_cards.addChild(summon.sprite);
+				});
+
+				var summon_cards_back_button_sprites = [
+					textures['back_up.png'],
+					textures['back_over.png'],
+					textures['back_down.png']
+				];
+
+				var summon_cards_back_button = tink.button(summon_cards_back_button_sprites);
+				summon_cards_back_button.x = (renderer.width - summon_cards_back_button.width - 10);
+				summon_cards_back_button.y = (renderer.height - summon_cards_back_button.height - 10);
+				summon_cards_back_button.enabled = false;
+
+				summon_cards_back_button.tap = function () {
+					summon_cards.visible = false;
+					summon_cards_back_button.enabled = false;
+					summon_button.enabled = true;
+					playingStage.visible = true;
+					summoner1.summons.forEach(function (summon) {
+						summon.sprite.enabled = false;
+					});
+				};
+
+				summon_cards.addChild(summon_cards_back_button);
+
+				stage.addChild(summon_cards);
+				summon_cards.visible = false;
+
+
+				/*==================================*/
+				/*									*/
+				/* SUMMON CARDS	2					*/
+				/*									*/
+				/*==================================*/
+
+				var summon_cards2 = new PIXI.Container();
+
+				row_length = 7;
+				current_row = 0;
+				current_column = 0;
+
+				summoner2.summons.forEach(function (summon) {
+					summon.sprite.x = (summon.sprite.width * current_column) + (2 * (current_column + 1));
+					summon.sprite.y = (summon.sprite.height * current_row) + (2 * (current_row + 1));
+					current_column += 1;
+					if (current_column >= row_length) {
+						current_column = 0;
+						current_row += 1;
+					}
+
+					tink.makeInteractive(summon.sprite);
+					summon.sprite.enabled = false;
+
+					summon.sprite.tap = function () {
+						console.log(summon.name);
+						summonSelected = summon;
+						summoner2.summons.forEach(function (summon) {
+							summon.sprite.enabled = false;
+						});
+						summon_cards_back_button.enabled = false;
+						summon_cards2.visible = false;
+						playingStage.visible = true;
+						summon_button.enabled = true;
+						cancel_button.enabled = true;
+						cancel_button.visible = true;
+						summoning_places.forEach(function (summoning_place) {
+							if (!summoning_place.taken) {
+								summoning_place.enabled = true;
+							}
+						});
+					};
+
+					summon_cards2.addChild(summon.sprite);
+				});
+
+				var summon_cards_back_button2 = tink.button(summon_cards_back_button_sprites);
+				summon_cards_back_button2.x = (renderer.width - summon_cards_back_button2.width - 10);
+				summon_cards_back_button2.y = (renderer.height - summon_cards_back_button2.height - 10);
+				summon_cards_back_button2.enabled = false;
+
+				summon_cards_back_button2.tap = function () {
+					summon_cards2.visible = false;
+					summon_cards_back_button2.enabled = false;
+					summon_button.enabled = true;
+					playingStage.visible = true;
+					summoner2.summons.forEach(function (summon) {
+						summon.sprite.enabled = false;
+					});
+				};
+
+				summon_cards2.addChild(summon_cards_back_button2);
+
+				stage.addChild(summon_cards2);
+				summon_cards2.visible = false;
+
+				/*==================================*/
+				/*									*/
+				/* WIN SCREEN 						*/
+				/*									*/
+				/*==================================*/
+
+				var winScreen = new PIXI.Container();
+				stage.addChild(winScreen);
+				winScreen.visible = false;
+
+				var winMessage = new PIXI.Text('You Win');
+				winScreen.addChild(winMessage);
+
+				/*==================================*/
+				/*									*/
+				/* LOSE SCREEN 						*/
+				/*									*/
+				/*==================================*/
+
+				var loseScreen = new PIXI.Container();
+				stage.addChild(loseScreen);
+				loseScreen.visible = false;
+
+				var loseMessage = new PIXI.Text('You Lose');
+				loseScreen.addChild(loseMessage);
+
+				/*==================================*/
+				/*									*/
+				/* BACK TO MENU						*/
+				/*									*/
+				/*==================================*/
+
+				var back_to_menu_button_sprites = [
+					textures['back_up.png'],
+					textures['back_over.png'],
+					textures['back_down.png']
+				];
+
+				var back_to_menu_button = tink.button(back_to_menu_button_sprites);
+				back_to_menu_button.x = (renderer.width - back_to_menu_button.width - 10);
+				back_to_menu_button.y = (renderer.height - back_to_menu_button.height - 10);
+				back_to_menu_button.enabled = false;
+
+				back_to_menu_button.tap = function () {
+					winScreen.visible = false;
+					loseScreen.visible = false;
+					menu.show();
+				};
+
+				loseScreen.addChild(back_to_menu_button);
+				winScreen.addChild(back_to_menu_button);
+
+				/*==================================*/
+				/*									*/
+				/* GAME LOOP 						*/
+				/*									*/
+				/*==================================*/
+				function loop() {
+					requestAnimationFrame(loop);
+
+					tink.update();
+
+					if (gameState == 'started') {
+						if (summoner1.hp <= 0) {
+							/* Lose Screen */
+							console.log('PLAYER 2 WIN');
+							clearInterval(hpHandler);
+							gameState = 'ended';
+							playingStage.hide();
+							loseScreen.visible = true;
+							loseScreen.addChild(back_to_menu_button);
+							back_to_menu_button.enabled = true;
+						} else if (summoner2.hp <= 0) {
+							/* Win Screen */
+							console.log('PLAYER 1 WIN');
+							clearInterval(hpHandler);
+							gameState = 'ended';
+							playingStage.hide();
+							winScreen.visible = true;
+							winScreen.addChild(back_to_menu_button);
+							back_to_menu_button.enabled = true;
+						}
+					}
+
+					renderer.render(stage);
+				}
+				var hpHandler = null;
+
+				function start() {
+					/*==================================*/
+					/*									*/
+					/* AURA INTERVALS					*/
+					/*									*/
+					/*==================================*/
+					gameState = 'started';
+
+					summoner1.auras.forEach(function (aura) {
+						setInterval(aura.effect, aura.interval);
+					});
+
+					summoner1.spells.passive.forEach(function (spell) {
+						setInterval(spell.effect, spell.interval);
+					});
+
+					summoner2.auras.forEach(function (aura) {
+						setInterval(aura.effect, aura.interval);
+					});
+
+					summoner2.spells.passive.forEach(function (spell) {
+						setInterval(spell.effect, spell.interval);
+					});
+
+					var summoner1HPLabel = new PIXI.Text(summoner1.name + ': ' + summoner1.hp, { font: 'Arial 12px' });
+					var summoner2HPLabel = new PIXI.Text(summoner2.name + ': ' + summoner2.hp, { font: 'Arial 12px' });
+					playingStage.addChild(summoner1HPLabel);
+					playingStage.addChild(summoner2HPLabel);
+					summoner2HPLabel.x = renderer.width - summoner2HPLabel.width;
+
+					hpHandler = setInterval(function () {
+						summoner2HPLabel.x = renderer.width - summoner2HPLabel.width;
+						summoner1HPLabel.text = summoner1.name + ': ' + summoner1.hp;
+						summoner2HPLabel.text = summoner2.name + ': ' + summoner2.hp;
+					}, 1000);
+				}
+
+				loop();
+
+				var keyW = keyboard('W'.charCodeAt(0));
+				var keyA = keyboard('A'.charCodeAt(0));
+				var keyS = keyboard('S'.charCodeAt(0));
+				var keyD = keyboard('D'.charCodeAt(0));
+				var key1 = keyboard('1'.charCodeAt(0));
+
+				key1.press = function () {
+					whosPlaying = (whosPlaying == summoner1 ? summoner2 : summoner1);
+					whosPlayingLabel.text = 'Playing as: ' + whosPlaying.name;
+				};
+
+				keyW.press = function () {
+					summon_button.vy -= 1;
+				};
+				keyA.press = function () {
+					summon_button.vx -= 1;
+				};
+				keyS.press = function () {
+					summon_button.vy += 1;
+				};
+				keyD.press = function () {
+					summon_button.vx += 1;
+				};
+
+				keyW.release = function () {
+					summon_button.vy += 1;
+				};
+				keyA.release = function () {
+					summon_button.vx += 1;
+				};
+				keyS.release = function () {
+					summon_button.vy -= 1;
+				};
+				keyD.release = function () {
+					summon_button.vx -= 1;
+				};
+			});
+
+		function keyboard(keyCode) {
+			var key = {};
+			key.code = keyCode;
+			key.isDown = false;
+			key.isUp = true;
+			key.press = undefined;
+			key.release = undefined;
+			//The `downHandler`
+			key.downHandler = function (event) {
+				if (event.keyCode === key.code) {
+					if (key.isUp && key.press) key.press();
+					key.isDown = true;
+					key.isUp = false;
+				}
+				event.preventDefault();
+			};
+
+			//The `upHandler`
+			key.upHandler = function (event) {
+				if (event.keyCode === key.code) {
+					if (key.isDown && key.release) key.release();
+					key.isDown = false;
+					key.isUp = true;
+				}
+				event.preventDefault();
+			};
+
+			//Attach event listeners
+			window.addEventListener(
+				"keydown", key.downHandler.bind(key), false
+			);
+			window.addEventListener(
+				"keyup", key.upHandler.bind(key), false
+			);
+			return key;
+		}
+	</script>
+
+	<p>
+		Here i was testint multiple screens and buttons, it is unfinished
+		you can click on 'Buscar Partida' on the first screen, then on summon button,
+		then you can select a unit to summon, when clicking a unit you will return to the board
+		screen where you can then click a square to place your unit.
+
+		For some reason the buttons are unable to detect a click with the touchpad, use a mouse or the buttons on the touchpad.
+	</p>
+</body>
+
+</html>
