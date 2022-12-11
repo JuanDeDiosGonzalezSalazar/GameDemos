@@ -10,7 +10,7 @@
   "author": "Juan de Dios Gonzalez Salazar",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.17.1",
+    "express": "^4.17.3",
     "jquery": "^3.4.1",
     "pixi.js": "^5.1.3"
   }
